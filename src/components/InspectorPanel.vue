@@ -9,7 +9,7 @@
       </div>
     </div>
 
-    <n-scrollbar style="max-height: calc(100vh - 188px)" trigger="hover">
+    <n-scrollbar class="min-h-0 flex-1" trigger="hover">
       <div class="space-y-4 p-4">
         <section v-if="rightPanel === 'changes'" class="space-y-4">
           <div class="grid grid-cols-2 gap-2">

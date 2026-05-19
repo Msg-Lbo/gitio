@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Gitio",
-  "version": "0.1.0",
-  "identifier": "com.gitio.app",
+  "version": "1.0.0",
+  "identifier": "com.msg-lbo.gitio",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://127.0.0.1:1420",
@@ -19,7 +19,7 @@
         "minWidth": 1180,
         "minHeight": 760,
         "center": true,
-        "decorations": true,
+        "decorations": false,
         "resizable": true
       }
     ],
@@ -30,6 +30,30 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "icon": ["icons/icon.ico"]
+    "createUpdaterArtifacts": true,
+    "icon": [
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "languages": [
+          "SimpChinese",
+          "English"
+        ],
+        "displayLanguageSelector": true
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDUzQkJCNUIzMUZCNENDREIKUldUYnpMUWZzN1c3VXd2UE1lN1M4aS9kb3F4NHg5OVo3MWt1N2EvUVVXT00zdmwvSmV6YXU0UjcK",
+      "endpoints": [
+        "https://github.com/Msg-Lbo/gitio/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

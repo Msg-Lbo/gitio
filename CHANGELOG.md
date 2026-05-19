@@ -4,6 +4,10 @@
 
 ## [Unreleased]
 
+_暂无未发布变更。_
+
+## [1.0.0] - 2026-05-19
+
 ### Added
 
 - 新增 Gitio 三栏桌面工作台：仓库收藏、分支选择、提交图谱和右侧 Inspector。
@@ -16,6 +20,9 @@
 - 新增仓库 `.git/config` 与全局 `.gitconfig` 读取和保存。
 - 新增亮色/暗色主题切换，使用太阳和月亮图标显示当前切换入口。
 - 新增 README 顶部 SVG banner、项目 logo 和技术栈徽章。
+- 新增 Tauri 在线更新能力，应用启动时自动检查 GitHub Release 新版本。
+- 新增标题栏版本号入口和在线更新弹窗，支持更新日志、下载进度、安装后重启。
+- 新增 GitHub Actions 多平台发布流程，自动上传安装包和 updater JSON。
 
 ### Changed
 
@@ -24,6 +31,7 @@
 - 调整 UI 视觉风格：缩小圆角，改为更清爽的 sky/teal 配色和更轻的面板阴影。
 - 右侧 Inspector 的 `.git` 文件列表改用 Naive UI `n-scrollbar`。
 - 移除右侧 `变更` 面板中的工作区状态列表，仅保留操作入口和提交输入。
+- 将 README logo 和 hero 图统一到 `docs/assets/gitio-logo.svg`，并优化透明圆角与留白显示。
 
 ### Fixed
 

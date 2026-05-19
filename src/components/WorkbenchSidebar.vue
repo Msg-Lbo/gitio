@@ -1,6 +1,6 @@
 <template>
   <aside class="glass-panel min-h-0 rounded-xl p-3">
-    <n-scrollbar style="max-height: calc(100vh - 126px)" trigger="hover">
+    <n-scrollbar class="h-full" trigger="hover">
       <div class="flex flex-col gap-4 pr-1">
         <section>
           <div class="mb-2 flex items-center justify-between">

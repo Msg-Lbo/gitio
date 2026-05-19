@@ -1,7 +1,7 @@
 <template>
   <header class="glass-panel flex shrink-0 flex-col gap-3 rounded-xl p-4 xl:flex-row xl:items-center xl:justify-between">
     <div class="flex min-w-0 items-center gap-3">
-      <div class="flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-sky-500 to-teal-500 text-lg font-black text-white shadow-lg shadow-sky-500/20">G</div>
+      <img :src="appIcon" alt="" class="h-11 w-11 shrink-0 rounded-lg shadow-lg shadow-sky-500/20" />
       <div class="min-w-0">
         <p class="text-xs uppercase tracking-[0.32em] text-slate-500 dark:text-slate-400">Gitio Graph Workbench</p>
         <h1 class="truncate text-xl font-black text-slate-950 dark:text-white">{{ currentRepoAlias || inferRepoAlias(repoPath) || '选择仓库' }}</h1>
@@ -32,6 +32,7 @@ import { useCommands } from '@/composables/workbench/useCommands';
 import { useRepositories } from '@/composables/workbench/useRepositories';
 import { useRepositoryData } from '@/composables/workbench/useRepositoryData';
 import { useTheme } from '@/composables/workbench/useTheme';
+import appIcon from '@/assets/gitio-logo.svg';
 
 const {
   isDark,

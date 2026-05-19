@@ -35,6 +35,7 @@
 - `.git` 浏览：可以查看当前仓库真实 `.git` 目录，支持 worktree/submodule 的 gitfile 场景。
 - Config 编辑：支持读取、编辑和保存仓库 `.git/config` 与全局 `.gitconfig`。
 - 明暗色主题：提供清爽的亮色和深海蓝暗色主题，使用太阳/月亮图标切换。
+- 在线更新：标题栏展示当前版本，启动时自动检查 GitHub Release，有新版本时高亮提示并支持下载、安装和重启。
 
 ## 界面结构
 
@@ -86,6 +87,24 @@ npm run build
 npm run tauri:build
 ```
 
+启用 updater artifacts 后，完整桌面构建需要设置 `TAURI_SIGNING_PRIVATE_KEY`。如果密钥带密码，还需要设置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。未设置私钥时，本地可能已生成 MSI/NSIS 安装包，但会在 updater 签名产物阶段失败。
+
+## 发布与在线更新
+
+在线更新使用 Tauri 官方 updater 插件，更新源指向 GitHub Release：
+
+```text
+https://github.com/Msg-Lbo/gitio/releases/latest/download/latest.json
+```
+
+发布流程通过 `.github/workflows/release.yml` 完成：
+
+- 手动触发 workflow 可更新版本号、归档 changelog 并创建 tag。
+- 推送 `v*.*.*` tag 后会构建 Windows、Linux、macOS 安装包。
+- `tauri-apps/tauri-action` 会上传安装包和 updater JSON 到 GitHub Release。
+- Tauri updater 需要签名密钥，仓库 Secrets 需配置 `TAURI_SIGNING_PRIVATE_KEY`，如密钥带密码还需配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
+- Windows 安装包使用 NSIS，支持用户级/机器级安装，并显示中英文语言选择。
+
 ## 项目结构
 
 ```text
@@ -120,21 +139,7 @@ gitio/
 - `useGitFiles.ts`：`.git` 文件浏览和保存。
 - `useConfigFiles.ts`：Git config 读取和保存。
 - `useTheme.ts`：明暗色主题。
-
-## 发布版本
-
-```bash
-npm run release:tag -- 0.2.0
-```
-
-该命令会同步更新：
-
-- `package.json`
-- `src-tauri/Cargo.toml`
-- `src-tauri/tauri.conf.json`
-- `CHANGELOG.md`
-
-脚本只更新版本文件和 changelog，不会自动创建 Git tag 或推送远端。请检查变更后再按团队流程发布。
+- `src/composables/useAppUpdater.ts`：应用版本读取、更新检查、下载进度和安装重启。
 
 ## 安全边界
 

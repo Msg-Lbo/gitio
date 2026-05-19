@@ -467,6 +467,8 @@ fn write_global_config(content: String) -> Result<(), GitioError> {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_process::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             execute_git,
             get_repo_overview,

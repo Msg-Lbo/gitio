@@ -11,7 +11,7 @@
       </div>
     </div>
 
-    <n-scrollbar style="max-height: calc(100vh - 188px)" trigger="hover">
+    <n-scrollbar class="min-h-0 flex-1" trigger="hover">
       <div class="p-3">
         <div v-if="selectedCommitLine.length" class="py-1">
           <article v-for="row in graphRows" :key="row.commit.hash" :class="['group grid h-8 items-center rounded px-1 transition hover:bg-slate-950/5 dark:hover:bg-white/5', selectedCommit?.hash === row.commit.hash ? 'bg-sky-500/10' : '']" :style="{ gridTemplateColumns: `${graphWidth}px minmax(0,1fr)` }" @click="selectCommit(row.commit)" @dblclick="runCommand(`git show --stat --patch ${row.commit.hash}`)">
