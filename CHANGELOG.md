@@ -4,7 +4,10 @@
 
 ## [Unreleased]
 
-_暂无未发布变更。_
+### Changed
+
+- 发布流程暂时收敛为 Windows 安装包，避免 Linux/macOS 未完成平台配置时阻断首版发布。
+- 补齐 Tauri 桌面端标准图标资源，包含 PNG 和 ICNS 图标。
 
 ## [1.0.0] - 2026-05-19
 

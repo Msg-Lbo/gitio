@@ -100,7 +100,7 @@ https://github.com/Msg-Lbo/gitio/releases/latest/download/latest.json
 发布流程通过 `.github/workflows/release.yml` 完成：
 
 - 手动触发 workflow 可更新版本号、归档 changelog 并创建 tag。
-- 推送 `v*.*.*` tag 后会构建 Windows、Linux、macOS 安装包。
+- 推送 `v*.*.*` tag 后会构建 Windows 安装包；Linux/macOS 打包会在补齐平台签名和发布策略后再打开。
 - `tauri-apps/tauri-action` 会上传安装包和 updater JSON 到 GitHub Release。
 - Tauri updater 需要签名密钥，仓库 Secrets 需配置 `TAURI_SIGNING_PRIVATE_KEY`，如密钥带密码还需配置 `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`。
 - Windows 安装包使用 NSIS，支持用户级/机器级安装，并显示中英文语言选择。
