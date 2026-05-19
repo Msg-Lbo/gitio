@@ -84,6 +84,30 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf
       - name: Install dependencies
         run: npm ci
+      - name: Build release notes
+        id: release_notes
+        shell: bash
+        run: |
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs';
+
+          const version = process.env.GITHUB_REF_NAME.replace(/^v/, '');
+          const changelog = fs.readFileSync('CHANGELOG.md', 'utf8');
+          const marker = `## [${version}]`;
+          const startIndex = changelog.indexOf(marker);
+          const fallback = 'See CHANGELOG.md for release notes.';
+          let body = fallback;
+
+          if (startIndex >= 0) {
+            const afterStart = changelog.slice(startIndex);
+            const nextSection = afterStart.slice(marker.length).match(/\n## \[/);
+            body = (nextSection
+              ? afterStart.slice(0, marker.length + nextSection.index)
+              : afterStart).trim();
+          }
+
+          fs.appendFileSync(process.env.GITHUB_OUTPUT, `body<<GITIO_RELEASE_NOTES\n${body}\nGITIO_RELEASE_NOTES\n`);
+          NODE
       - name: Build and publish Tauri bundles
         uses: tauri-apps/tauri-action@v0
         env:
@@ -93,9 +117,34 @@ jobs:
         with:
           tagName: ${{ github.ref_name }}
           releaseName: Gitio ${{ github.ref_name }}
-          releaseBody: See CHANGELOG.md for release notes.
+          releaseBody: ${{ steps.release_notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
           updaterJsonPreferNsis: true
           args: ${{ matrix.args }}
+      - name: Sync GitHub release body
+        uses: actions/github-script@v7
+        env:
+          RELEASE_BODY: ${{ steps.release_notes.outputs.body }}
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const tag = context.ref.replace('refs/tags/', '');
+            const body = process.env.RELEASE_BODY || '';
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag,
+            });
+
+            await github.rest.repos.updateRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              tag_name: tag,
+              name: `Gitio ${tag}`,
+              body,
+              draft: false,
+              prerelease: false,
+            });

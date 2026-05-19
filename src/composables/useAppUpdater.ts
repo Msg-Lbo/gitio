@@ -3,6 +3,7 @@ import { getVersion } from '@tauri-apps/api/app';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
 import packageInfo from '../../package.json';
+import changelogText from '../../CHANGELOG.md?raw';
 
 type UpdateStatus = 'idle' | 'checking' | 'available' | 'latest' | 'downloading' | 'installing' | 'error';
 
@@ -17,13 +18,13 @@ const downloadedBytes = ref(0);
 const downloadTotalBytes = ref(0);
 const downloadStarted = ref(false);
 
-let pendingUpdate: Update | null = null;
+const pendingUpdate = ref<Update | null>(null);
 let didCheckOnStartup = false;
 
-const hasAvailableUpdate = computed(() => Boolean(pendingUpdate) && ['available', 'downloading', 'installing'].includes(status.value));
+const hasAvailableUpdate = computed(() => ['available', 'downloading', 'installing'].includes(status.value));
 const checking = computed(() => status.value === 'checking');
 const updating = computed(() => status.value === 'downloading' || status.value === 'installing');
-const canInstallUpdate = computed(() => Boolean(pendingUpdate) && !checking.value && !updating.value);
+const canInstallUpdate = computed(() => status.value === 'available' && !checking.value && !updating.value);
 const downloadPercent = computed(() => {
   if (status.value === 'installing') {
     return 100;
@@ -35,6 +36,30 @@ const downloadPercent = computed(() => {
 
   return Math.min(100, Math.round((downloadedBytes.value / downloadTotalBytes.value) * 100));
 });
+
+/**
+ * 从本地内置的 CHANGELOG 中提取指定版本的完整更新日志。
+ *
+ * @param version 版本号，支持带或不带 `v` 前缀。
+ * @return 对应版本段的 markdown 文本。
+ */
+function extractChangelogSection(version: string) {
+  const normalizedVersion = version.replace(/^v/, '');
+  const startMarker = `## [${normalizedVersion}]`;
+  const startIndex = changelogText.indexOf(startMarker);
+
+  if (startIndex === -1) {
+    return '';
+  }
+
+  const afterStart = changelogText.slice(startIndex);
+  const nextSectionMatch = afterStart.slice(startMarker.length).match(/\n## \[/);
+  const section = nextSectionMatch
+    ? afterStart.slice(0, startMarker.length + (nextSectionMatch.index ?? 0))
+    : afterStart;
+
+  return section.trim();
+}
 
 /**
  * 把未知异常转换成可展示的中文错误文本。
@@ -101,9 +126,9 @@ async function checkForUpdates() {
   errorMessage.value = '';
 
   try {
-    pendingUpdate = await check({ timeout: 30000 });
+    pendingUpdate.value = await check({ timeout: 30000 });
 
-    if (!pendingUpdate) {
+    if (!pendingUpdate.value) {
       latestVersion.value = currentVersion.value;
       releaseDate.value = '';
       releaseNotes.value = '当前已是最新版本。';
@@ -111,12 +136,12 @@ async function checkForUpdates() {
       return;
     }
 
-    latestVersion.value = pendingUpdate.version;
-    releaseDate.value = pendingUpdate.date ?? '';
-    releaseNotes.value = pendingUpdate.body?.trim() || '暂无更新日志。';
+    latestVersion.value = pendingUpdate.value.version;
+    releaseDate.value = pendingUpdate.value.date ?? '';
+    releaseNotes.value = extractChangelogSection(pendingUpdate.value.version) || pendingUpdate.value.body?.trim() || '暂无更新日志。';
     status.value = 'available';
   } catch (error) {
-    pendingUpdate = null;
+    pendingUpdate.value = null;
     latestVersion.value = '';
     releaseDate.value = '';
     errorMessage.value = normalizeError(error);
@@ -135,11 +160,12 @@ async function installUpdate() {
     return;
   }
 
-  if (!pendingUpdate) {
+  if (!pendingUpdate.value) {
     await checkForUpdates();
   }
 
-  if (!pendingUpdate) {
+  const update = pendingUpdate.value;
+  if (!update) {
     return;
   }
 
@@ -150,7 +176,7 @@ async function installUpdate() {
   downloadTotalBytes.value = 0;
 
   try {
-    await pendingUpdate.downloadAndInstall(handleDownloadEvent, { timeout: 120000 });
+    await update.downloadAndInstall(handleDownloadEvent, { timeout: 120000 });
     status.value = 'installing';
     await relaunch();
   } catch (error) {

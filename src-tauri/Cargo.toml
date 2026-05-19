@@ -1,6 +1,6 @@
 [package]
 name = "gitio"
-version = "1.0.1"
+version = "1.0.2"
 description = "Modern desktop Git workbench"
 authors = ["Gitio Team"]
 edition = "2021"

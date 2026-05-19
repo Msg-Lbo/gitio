@@ -20,7 +20,9 @@ export function useWorkbenchBoot() {
     isDark.value = localStorage.getItem(STORAGE_KEYS.theme) === 'dark';
     document.documentElement.classList.toggle('dark', isDark.value);
     if (repoPath.value) {
-      refreshAll();
+      requestAnimationFrame(() => {
+        void refreshAll();
+      });
     }
   });
 }

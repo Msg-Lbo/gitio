@@ -1,3 +1,4 @@
+import { nextTick } from 'vue';
 import { getCommitLine, getRepoOverview, listBranches } from '@/services/gitApi';
 import type { CommitNode } from '@/types/git';
 import { useCommitGraph } from '@/composables/useCommitGraph';
@@ -32,6 +33,7 @@ export async function refreshAll() {
   }
 
   loading.value = true;
+  await nextTick();
   try {
     overview.value = await getRepoOverview(repoPath.value);
     repositoryPushDraft.value = currentRepositoryPushCommand.value;

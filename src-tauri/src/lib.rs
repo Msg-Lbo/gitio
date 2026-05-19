@@ -7,6 +7,12 @@ use std::{
 };
 use thiserror::Error;
 
+#[cfg(windows)]
+use std::os::windows::process::CommandExt;
+
+#[cfg(windows)]
+const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
 #[derive(Debug, Error)]
 enum GitioError {
     #[error("仓库路径不存在")]
@@ -115,7 +121,7 @@ fn repo_root(repo_path: &str) -> Result<PathBuf, GitioError> {
     }
 
     let selected = fs::canonicalize(path)?;
-    let output = Command::new("git")
+    let output = git_command()
         .args(["rev-parse", "--show-toplevel"])
         .current_dir(&selected)
         .output()?;
@@ -163,13 +169,29 @@ fn git_dir(root: &Path) -> Result<PathBuf, GitioError> {
  * @return 命令执行结果。
  */
 fn run_git(root: &Path, args: &[String]) -> Result<CommandResult, GitioError> {
-    let output = Command::new("git").args(args).current_dir(root).output()?;
+    let output = git_command().args(args).current_dir(root).output()?;
 
     Ok(CommandResult {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
     })
+}
+
+/**
+ * 创建一个在 Windows 上不弹出控制台窗口的 `git` 命令实例。
+ *
+ * @return 配置好的 `git` 命令对象。
+ */
+fn git_command() -> Command {
+    let mut command = Command::new("git");
+
+    #[cfg(windows)]
+    {
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+
+    command
 }
 
 /**

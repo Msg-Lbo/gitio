@@ -27,9 +27,9 @@
       <section>
         <div class="mb-2 flex items-center justify-between gap-3">
           <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">更新日志</h3>
-          <span class="text-xs text-slate-500 dark:text-slate-400">来自 GitHub Release</span>
+          <span class="text-xs text-slate-500 dark:text-slate-400">来自 CHANGELOG / GitHub Release</span>
         </div>
-        <n-scrollbar style="max-height: 260px" trigger="hover" class="rounded-xl border border-slate-200/70 bg-white/70 p-4 dark:border-white/10 dark:bg-[#071524]/70">
+        <n-scrollbar style="max-height: 360px" trigger="hover" class="rounded-xl border border-slate-200/70 bg-white/70 p-4 dark:border-white/10 dark:bg-[#071524]/70">
           <pre class="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-slate-200">{{ releaseNotes }}</pre>
         </n-scrollbar>
       </section>
@@ -44,7 +44,7 @@
 
       <div class="flex justify-end gap-2">
         <n-button :loading="checking" :disabled="updating" @click="checkForUpdates">检查更新</n-button>
-        <n-button type="primary" :disabled="!canInstallUpdate" :loading="updating" @click="installUpdate">立即更新</n-button>
+        <n-button type="primary" strong :disabled="!canInstallUpdate" :loading="updating" @click="installUpdate">立即更新</n-button>
       </div>
     </div>
   </n-modal>
@@ -74,7 +74,7 @@ const {
 } = useAppUpdater();
 
 const latestVersionLabel = computed(() => (latestVersion.value ? `v${latestVersion.value}` : '待检查'));
-const releaseDateLabel = computed(() => releaseDate.value || '暂无');
+const releaseDateLabel = computed(() => formatReleaseDate(releaseDate.value));
 const statusText = computed(() => {
   const labels = {
     idle: '待检查',
@@ -134,5 +134,29 @@ function formatBytes(bytes: number) {
   const value = bytes / 1024 ** exponent;
 
   return `${value.toFixed(value >= 10 || exponent === 0 ? 0 : 1)} ${units[exponent]}`;
+}
+
+/**
+ * 将 updater 返回的 ISO 发布时间转换为本地可读时间，避免界面直接展示毫秒和时区标记。
+ *
+ * @param value updater 返回的原始发布时间。
+ * @return 形如 `2026-05-19 18:39` 的本地时间文本。
+ */
+function formatReleaseDate(value: string) {
+  if (!value) {
+    return '暂无';
+  }
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  const pad = (part: number) => String(part).padStart(2, '0');
+
+  return [
+    `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`,
+    `${pad(date.getHours())}:${pad(date.getMinutes())}`
+  ].join(' ');
 }
 </script>

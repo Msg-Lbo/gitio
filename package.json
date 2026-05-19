@@ -1,6 +1,6 @@
 {
   "name": "gitio",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "private": true,
   "type": "module",
   "description": "Modern desktop Git workbench powered by Tauri 2, Vue 3 and Naive UI.",
