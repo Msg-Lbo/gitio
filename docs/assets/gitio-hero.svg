@@ -1,0 +1,25 @@
+<svg width="960" height="320" viewBox="0 0 960 320" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="960" height="320" rx="28" fill="#071524"/>
+  <circle cx="155" cy="58" r="145" fill="#0EA5E9" fill-opacity="0.22"/>
+  <circle cx="775" cy="90" r="180" fill="#14B8A6" fill-opacity="0.18"/>
+  <path d="M0 250C150 215 250 270 382 230C505 193 610 184 746 216C834 237 900 221 960 188V320H0V250Z" fill="#0D263C"/>
+  <rect x="76" y="72" width="92" height="92" rx="20" fill="url(#logoBg)"/>
+  <path d="M102 118C102 102.536 114.536 90 130 90H153V103H130C121.716 103 115 109.716 115 118C115 126.284 121.716 133 130 133H141V123H129V110H155V146H130C114.536 146 102 133.464 102 118Z" fill="white"/>
+  <text x="196" y="112" fill="#F8FAFC" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="58" font-weight="800" letter-spacing="-1.5">Gitio</text>
+  <text x="199" y="150" fill="#B6C7D8" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="18" letter-spacing="4">GRAPH WORKBENCH</text>
+  <text x="80" y="214" fill="#DDEBFA" font-family="Inter, Segoe UI, Arial, sans-serif" font-size="22">A desktop Git workbench for command-first Git, GitLab and Gerrit workflows.</text>
+  <g opacity="0.9">
+    <path d="M713 135C713 118.431 726.431 105 743 105H817C833.569 105 847 118.431 847 135C847 151.569 833.569 165 817 165H743C726.431 165 713 151.569 713 135Z" fill="#0B1C2E" stroke="#235A7C"/>
+    <circle cx="748" cy="135" r="9" fill="#57B6FF"/>
+    <circle cx="782" cy="135" r="9" fill="#42DCC9"/>
+    <circle cx="816" cy="135" r="9" fill="#FBBF24"/>
+    <path d="M757 135H773" stroke="#8AD5FF" stroke-width="3" stroke-linecap="round"/>
+    <path d="M791 135H807" stroke="#8AF5E9" stroke-width="3" stroke-linecap="round"/>
+  </g>
+  <defs>
+    <linearGradient id="logoBg" x1="76" y1="72" x2="168" y2="164" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0EA5E9"/>
+      <stop offset="1" stop-color="#14B8A6"/>
+    </linearGradient>
+  </defs>
+</svg>
