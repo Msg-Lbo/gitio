@@ -1,4 +1,4 @@
-import { computed, ref } from 'vue';
+import { computed, ref, shallowRef } from 'vue';
 import { getVersion } from '@tauri-apps/api/app';
 import { check, type DownloadEvent, type Update } from '@tauri-apps/plugin-updater';
 import { relaunch } from '@tauri-apps/plugin-process';
@@ -18,7 +18,7 @@ const downloadedBytes = ref(0);
 const downloadTotalBytes = ref(0);
 const downloadStarted = ref(false);
 
-const pendingUpdate = ref<Update | null>(null);
+const pendingUpdate = shallowRef<Update | null>(null);
 let didCheckOnStartup = false;
 
 const hasAvailableUpdate = computed(() => ['available', 'downloading', 'installing'].includes(status.value));

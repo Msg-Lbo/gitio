@@ -29,8 +29,10 @@
           <h3 class="text-sm font-semibold text-slate-900 dark:text-slate-50">更新日志</h3>
           <span class="text-xs text-slate-500 dark:text-slate-400">来自 CHANGELOG / GitHub Release</span>
         </div>
-        <n-scrollbar style="max-height: 360px" trigger="hover" class="rounded-xl border border-slate-200/70 bg-white/70 p-4 dark:border-white/10 dark:bg-[#071524]/70">
-          <pre class="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-slate-200">{{ releaseNotes }}</pre>
+        <n-scrollbar style="max-height: 360px" trigger="hover" class="rounded-xl border border-slate-200/70 bg-white/70 dark:border-white/10 dark:bg-[#071524]/70">
+          <div class="px-4 pb-8 pt-4">
+            <pre class="whitespace-pre-wrap break-words text-sm leading-7 text-slate-700 dark:text-slate-200">{{ releaseNotes }}</pre>
+          </div>
         </n-scrollbar>
       </section>
 
