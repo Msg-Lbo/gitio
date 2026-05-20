@@ -21,7 +21,33 @@ export interface GraphCurve {
   type: 'out' | 'in';
 }
 
-const commitColors = ['#60a5fa', '#2dd4bf', '#a78bfa', '#fbbf24', '#fb7185', '#38bdf8', '#4ade80', '#f472b6', '#c084fc', '#22d3ee'];
+const authorColors = [
+  '#22d3ee',
+  '#f97316',
+  '#a3e635',
+  '#ec4899',
+  '#8b5cf6',
+  '#facc15',
+  '#14b8a6',
+  '#ef4444',
+  '#38bdf8',
+  '#84cc16',
+  '#f472b6',
+  '#6366f1',
+  '#fb7185',
+  '#10b981',
+  '#eab308',
+  '#06b6d4',
+  '#d946ef',
+  '#f59e0b',
+  '#2dd4bf',
+  '#c084fc',
+  '#60a5fa',
+  '#f43f5e',
+  '#34d399',
+  '#fde047'
+];
+const laneColors = ['#60a5fa', '#2dd4bf', '#a78bfa', '#fbbf24', '#fb7185', '#38bdf8', '#4ade80', '#f472b6', '#c084fc', '#22d3ee'];
 
 /**
  * 生成提交图谱所需的行数据、宽度和 SVG 绘制工具函数。
@@ -31,6 +57,7 @@ const commitColors = ['#60a5fa', '#2dd4bf', '#a78bfa', '#fbbf24', '#fb7185', '#3
  */
 export function useCommitGraph(selectedCommitLine: Ref<CommitNode[]>) {
   const graphRows = computed(() => buildGraphRows(selectedCommitLine.value));
+  const authorColorMap = computed(() => buildAuthorColorMap(selectedCommitLine.value));
   const graphWidth = computed(() => {
     const maxLane = Math.max(
       1,
@@ -52,12 +79,42 @@ export function useCommitGraph(selectedCommitLine: Ref<CommitNode[]>) {
     graphCurvePath,
     visibleTopLines,
     visibleBottomLines,
-    commitColor,
+    commitColor: (author: string) => commitColor(author, authorColorMap.value),
     laneColor,
     commitRefs,
     compactRefs,
     shortParents
   };
+}
+
+/**
+ * 为当前提交列表内的作者分配高对比度颜色，尽量避免不同作者使用同色。
+ *
+ * @param commits 当前提交列表。
+ * @return 作者到颜色的映射。
+ */
+function buildAuthorColorMap(commits: CommitNode[]) {
+  const usedColors = new Set<string>();
+  const colorMap = new Map<string, string>();
+  const authors = [...new Set(commits.map((commit) => normalizeAuthor(commit.author)))].sort((left, right) => left.localeCompare(right));
+
+  for (const author of authors) {
+    const startIndex = hashString(author) % authorColors.length;
+    let color = authorColors[startIndex];
+
+    for (let offset = 0; offset < authorColors.length; offset += 1) {
+      const candidate = authorColors[(startIndex + offset) % authorColors.length];
+      if (!usedColors.has(candidate)) {
+        color = candidate;
+        break;
+      }
+    }
+
+    usedColors.add(color);
+    colorMap.set(author, color);
+  }
+
+  return colorMap;
 }
 
 /**
@@ -209,12 +266,9 @@ function visibleBottomLines(row: GraphRow) {
  * @param author 提交作者名称。
  * @return CSS 颜色值。
  */
-function commitColor(author: string) {
-  let hash = 0;
-  for (const char of author) {
-    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
-  }
-  return commitColors[hash % commitColors.length];
+function commitColor(author: string, authorColorMap: Map<string, string>) {
+  const normalizedAuthor = normalizeAuthor(author);
+  return authorColorMap.get(normalizedAuthor) || authorColors[hashString(normalizedAuthor) % authorColors.length];
 }
 
 /**
@@ -224,7 +278,32 @@ function commitColor(author: string) {
  * @return CSS 颜色值。
  */
 function laneColor(lane: number) {
-  return commitColors[lane % commitColors.length];
+  return laneColors[lane % laneColors.length];
+}
+
+/**
+ * 规范化作者名称，避免空作者或首尾空格造成颜色映射不稳定。
+ *
+ * @param author 提交作者名称。
+ * @return 规范化后的作者名称。
+ */
+function normalizeAuthor(author: string) {
+  return author.trim() || 'unknown';
+}
+
+/**
+ * 将字符串稳定转换为无符号整数，用于作者颜色初始落点。
+ *
+ * @param value 待哈希字符串。
+ * @return 无符号整数哈希值。
+ */
+function hashString(value: string) {
+  let hash = 0;
+  for (const char of value) {
+    hash = (hash * 31 + char.charCodeAt(0)) >>> 0;
+  }
+
+  return hash;
 }
 
 /**
