@@ -28,10 +28,14 @@
         </section>
 
         <section>
-          <p class="mb-2 text-xs font-bold uppercase tracking-[0.24em] text-slate-500">Saved Commands</p>
+          <p class="mb-1 text-xs font-bold uppercase tracking-[0.24em] text-slate-500">Saved Commands</p>
+          <p class="mb-2 text-[11px] text-slate-500 dark:text-slate-400">右键保存指令可添加到悬浮窗。</p>
           <div class="flex flex-col gap-1">
-            <button v-for="savedCommand in savedCommands" :key="savedCommand.id" class="rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-950/5 dark:hover:bg-white/5" type="button" @click="runCommand(savedCommand.command)">
-              <span class="block truncate font-bold">{{ savedCommand.alias }}</span>
+            <button v-for="savedCommand in savedCommands" :key="savedCommand.id" class="rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-950/5 dark:hover:bg-white/5" type="button" :title="isSavedCommandFloating(savedCommand) ? '已在悬浮窗中，左键执行' : '左键执行，右键添加到悬浮窗'" @click="runCommand(savedCommand.command)" @contextmenu.prevent="addSavedCommandToFloating(savedCommand)">
+              <span class="flex min-w-0 items-center gap-2">
+                <span class="block min-w-0 flex-1 truncate font-bold">{{ savedCommand.alias }}</span>
+                <n-tag v-if="isSavedCommandFloating(savedCommand)" size="tiny" type="success" round>悬浮</n-tag>
+              </span>
               <span class="mono block truncate text-[11px] text-slate-500">{{ savedCommand.command }}</span>
             </button>
           </div>
@@ -64,6 +68,8 @@ const {
 
 const {
   savedCommands,
-  runCommand
+  runCommand,
+  addSavedCommandToFloating,
+  isSavedCommandFloating
 } = useCommands();
 </script>

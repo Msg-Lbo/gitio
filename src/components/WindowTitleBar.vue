@@ -14,6 +14,16 @@
       >
         v{{ currentVersion }}
       </button>
+      <button
+        type="button"
+        class="version-badge"
+        title="查看项目信息"
+        @mousedown.stop
+        @dblclick.stop
+        @click="openAboutDialog"
+      >
+        关于
+      </button>
     </div>
 
     <div class="flex h-full shrink-0 items-center" @dblclick.stop>
@@ -40,11 +50,13 @@
 <script setup lang="ts">
 import { onMounted, onUnmounted, ref } from 'vue';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import appIcon from '@/assets/gitio-logo.svg';
+import appIcon from '../../docs/assets/gitio-logo.svg';
+import { useAboutDialog } from '@/composables/useAboutDialog';
 import { useAppUpdater } from '@/composables/useAppUpdater';
 
 const appWindow = getCurrentWindow();
 const isMaximized = ref(false);
+const { openAboutDialog } = useAboutDialog();
 const { currentVersion, latestVersion, hasAvailableUpdate, openUpdateModal, checkOnStartup, loadCurrentVersion } = useAppUpdater();
 let unlistenResize: (() => void) | null = null;
 

@@ -6,7 +6,8 @@ export const STORAGE_KEYS = {
   theme: 'gitio.theme',
   repositories: 'gitio.savedRepositories',
   commands: 'gitio.savedCommands',
-  pushCommands: 'gitio.repositoryPushCommands'
+  pushCommands: 'gitio.repositoryPushCommands',
+  floatingCommands: 'gitio.floatingCommandIds'
 } as const;
 
 /**

@@ -5,6 +5,11 @@ use std::{
     path::{Component, Path, PathBuf},
     process::Command,
 };
+use tauri::{
+    menu::MenuBuilder,
+    tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
+    App, AppHandle, Manager, Runtime, Window, WindowEvent,
+};
 use thiserror::Error;
 
 #[cfg(windows)]
@@ -486,11 +491,103 @@ fn write_global_config(content: String) -> Result<(), GitioError> {
     Ok(())
 }
 
+/**
+ * 创建系统托盘。左键恢复窗口，右键菜单提供彻底退出。
+ *
+ * @param app Tauri 应用实例。
+ * @return 初始化结果。
+ */
+fn setup_tray(app: &mut App) -> tauri::Result<()> {
+    let tray_menu = MenuBuilder::new(app).text("quit", "退出 Gitio").build()?;
+    let mut tray = TrayIconBuilder::with_id("gitio-tray")
+        .menu(&tray_menu)
+        .show_menu_on_left_click(false)
+        .tooltip("Gitio")
+        .on_menu_event(|app, event| {
+            if event.id().as_ref() == "quit" {
+                app.exit(0);
+            }
+        })
+        .on_tray_icon_event(|tray, event| {
+            if matches!(
+                event,
+                TrayIconEvent::Click {
+                    button: MouseButton::Left,
+                    button_state: MouseButtonState::Up,
+                    ..
+                }
+            ) {
+                show_app_windows(tray.app_handle());
+            }
+        });
+
+    if let Some(icon) = app.default_window_icon().cloned() {
+        tray = tray.icon(icon);
+    }
+
+    tray.build(app)?;
+    Ok(())
+}
+
+/**
+ * 仅隐藏主窗口，让应用退到系统托盘，同时保留悬浮窗常驻桌面。
+ *
+ * @param app Tauri 应用句柄。
+ * @return 无返回值。
+ */
+fn hide_main_window<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.hide();
+    }
+}
+
+/**
+ * 从系统托盘恢复主窗口和悬浮窗，并聚焦主窗口。
+ *
+ * @param app Tauri 应用句柄。
+ * @return 无返回值。
+ */
+fn show_app_windows<R: Runtime>(app: &AppHandle<R>) {
+    if let Some(main_window) = app.get_webview_window("main") {
+        let _ = main_window.show();
+        let _ = main_window.unminimize();
+        let _ = main_window.set_focus();
+    }
+
+    if let Some(float_window) = app.get_webview_window("quick-float") {
+        let _ = float_window.show();
+        let _ = float_window.set_always_on_top(true);
+    }
+}
+
+/**
+ * 拦截主窗口关闭事件，改为隐藏到系统托盘。
+ *
+ * @param window 触发事件的窗口。
+ * @param event 窗口事件。
+ * @return 无返回值。
+ */
+fn handle_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
+    if window.label() != "main" {
+        return;
+    }
+
+    if let WindowEvent::CloseRequested { api, .. } = event {
+        api.prevent_close();
+        hide_main_window(window.app_handle());
+    }
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .setup(|app| {
+            setup_tray(app)?;
+            Ok(())
+        })
+        .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             execute_git,
             get_repo_overview,

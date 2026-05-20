@@ -1,4 +1,6 @@
+import { emit } from '@tauri-apps/api/event';
 import { commandPresets } from '@/data/presets';
+import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
 import { executeGit, getRepoOverview } from '@/services/gitApi';
 import type { SavedCommand } from '@/types/git';
 import { commandLabel, parseGitCommand } from '@/utils/command';
@@ -12,6 +14,7 @@ import {
   commitMessage,
   customCommand,
   editingCommandId,
+  floatingCommandIds,
   overview,
   pendingCommand,
   pendingCommandArgs,
@@ -231,10 +234,48 @@ function editSavedCommand(savedCommand: SavedCommand) {
  */
 function removeSavedCommand(id: string) {
   savedCommands.value = savedCommands.value.filter((item) => item.id !== id);
+  floatingCommandIds.value = floatingCommandIds.value.filter((commandId) => commandId !== id);
   if (editingCommandId.value === id) {
     cancelCommandEdit();
   }
   message.success('自定义指令已删除');
+  notifyFloatingDataChanged();
+}
+
+/**
+ * 将已保存的自定义指令加入悬浮窗快捷区，右键保存指令时调用。
+ *
+ * @param savedCommand 已保存指令。
+ * @return 无返回值。
+ */
+function addSavedCommandToFloating(savedCommand: SavedCommand) {
+  if (floatingCommandIds.value.includes(savedCommand.id)) {
+    message.info('该指令已在悬浮窗中');
+    return;
+  }
+
+  floatingCommandIds.value = [savedCommand.id, ...floatingCommandIds.value];
+  message.success(`已添加到悬浮窗：${savedCommand.alias}`);
+  notifyFloatingDataChanged();
+}
+
+/**
+ * 判断保存指令是否已经加入悬浮窗，用于主窗口提示当前状态。
+ *
+ * @param savedCommand 已保存指令。
+ * @return 是否已经加入悬浮窗。
+ */
+function isSavedCommandFloating(savedCommand: SavedCommand) {
+  return floatingCommandIds.value.includes(savedCommand.id);
+}
+
+/**
+ * 通知悬浮窗重新读取 localStorage 中的快捷数据。
+ *
+ * @return 无返回值。
+ */
+function notifyFloatingDataChanged() {
+  void emit(FLOATING_DATA_CHANGED_EVENT);
 }
 
 /**
@@ -272,16 +313,17 @@ function commitChanges() {
 }
 
 /**
- * 用输入框中的提交信息修改最近一次提交。
+ * 修改最近一次提交。输入框为空时保留原提交信息，等价执行 `--no-edit`。
  *
  * @return 无返回值。
  */
 function amendCommit() {
-  if (!commitMessage.value.trim()) {
-    message.warning('请输入提交信息');
-    return;
+  const messageText = commitMessage.value.trim();
+  if (!messageText) {
+    return runCommand('git commit --amend --no-edit');
   }
-  return runCommand(`git commit --amend -m "${commitMessage.value.replaceAll('"', '\\"')}"`);
+
+  return runCommand(`git commit --amend -m "${messageText.replaceAll('"', '\\"')}"`);
 }
 
 /**
@@ -328,6 +370,8 @@ export function useCommands() {
     selectSavedCommand,
     editSavedCommand,
     removeSavedCommand,
+    addSavedCommandToFloating,
+    isSavedCommandFloating,
     clearCommandDraft,
     cancelCommandEdit,
     commitChanges,

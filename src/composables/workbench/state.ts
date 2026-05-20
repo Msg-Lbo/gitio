@@ -26,6 +26,7 @@ export const customCommand = ref('git status --short --branch');
 export const editingCommandId = ref('');
 export const savedCommands = ref<SavedCommand[]>(loadStorage<SavedCommand[]>(STORAGE_KEYS.commands, []));
 export const repositoryPushCommands = ref<RepositoryPushCommand[]>(loadStorage<RepositoryPushCommand[]>(STORAGE_KEYS.pushCommands, []));
+export const floatingCommandIds = ref<string[]>(loadStorage<string[]>(STORAGE_KEYS.floatingCommands, []));
 export const repositoryPushDraft = ref('');
 export const commandOutput = ref('');
 export const branchName = ref('');
@@ -64,6 +65,9 @@ export const branchOptions = computed(() => branches.value.map((branch) => ({
   value: branch.name
 })));
 export const currentRepositoryPushCommand = computed(() => repositoryPushCommands.value.find((item) => item.repoPath === repoPath.value.trim())?.command || 'git push origin HEAD');
+export const floatingCommands = computed(() => floatingCommandIds.value
+  .map((id) => savedCommands.value.find((command) => command.id === id))
+  .filter((command): command is SavedCommand => Boolean(command)));
 
 watch(repoPath, (value) => {
   localStorage.setItem(STORAGE_KEYS.repoPath, value);
@@ -84,4 +88,8 @@ watch(savedCommands, (value) => {
 
 watch(repositoryPushCommands, (value) => {
   localStorage.setItem(STORAGE_KEYS.pushCommands, JSON.stringify(value));
+}, { deep: true });
+
+watch(floatingCommandIds, (value) => {
+  localStorage.setItem(STORAGE_KEYS.floatingCommands, JSON.stringify(value));
 }, { deep: true });
