@@ -21,6 +21,54 @@
             <n-button type="primary" @click="commitChanges">Commit</n-button>
             <n-button secondary @click="amendCommit">Amend</n-button>
           </div>
+          <div class="space-y-2">
+            <div class="flex items-center justify-between gap-2">
+              <h3 class="text-sm font-black text-slate-950 dark:text-white">文件变更</h3>
+              <n-tag size="small" round>{{ statusEntries.length }}</n-tag>
+            </div>
+            <div v-if="statusEntries.length" class="overflow-hidden rounded-md border border-slate-200/70 dark:border-slate-800">
+              <section v-if="stagedStatusEntries.length">
+                <button class="flex h-7 w-full items-center justify-between bg-slate-950/[0.04] px-2 text-left text-xs font-bold text-slate-500 transition hover:bg-slate-950/[0.07] dark:bg-white/[0.06] dark:text-slate-400 dark:hover:bg-white/[0.09]" type="button" @click="stagedChangesCollapsed = !stagedChangesCollapsed">
+                  <span class="flex min-w-0 items-center gap-1">
+                    <span class="text-[10px]">{{ stagedChangesCollapsed ? '▶' : '▼' }}</span>
+                    <span>暂存的更改</span>
+                  </span>
+                  <span>{{ stagedStatusEntries.length }}</span>
+                </button>
+                <article v-for="entry in stagedChangesCollapsed ? [] : stagedStatusEntries" :key="`staged-${entry.id}`" class="group flex min-h-8 items-center gap-2 border-t border-slate-200/70 px-2 py-1 text-xs hover:bg-sky-500/10 dark:border-slate-800">
+                  <span class="shrink-0 text-emerald-500">{{ statusBadge(entry.indexStatus) }}</span>
+                  <div class="flex min-w-0 flex-1 items-baseline overflow-hidden">
+                    <span class="mono shrink-0 truncate font-bold text-slate-800 dark:text-slate-100" :title="entry.path">{{ fileName(entry.path) }}</span>
+                    <span v-if="fileDirectory(entry.path)" class="mono ml-2 min-w-0 flex-1 truncate text-slate-400" :title="fileDirectory(entry.path)">{{ fileDirectory(entry.path) }}</span>
+                  </div>
+                  <n-button class="shrink-0" size="tiny" quaternary @click="unstageStatusEntry(entry)">取消暂存</n-button>
+                </article>
+              </section>
+
+              <section v-if="unstagedStatusEntries.length">
+                <button class="flex h-7 w-full items-center justify-between bg-slate-950/[0.04] px-2 text-left text-xs font-bold text-slate-500 transition hover:bg-slate-950/[0.07] dark:bg-white/[0.06] dark:text-slate-400 dark:hover:bg-white/[0.09]" type="button" @click="unstagedChangesCollapsed = !unstagedChangesCollapsed">
+                  <span class="flex min-w-0 items-center gap-1">
+                    <span class="text-[10px]">{{ unstagedChangesCollapsed ? '▶' : '▼' }}</span>
+                    <span>更改</span>
+                  </span>
+                  <span>{{ unstagedStatusEntries.length }}</span>
+                </button>
+                <article v-for="entry in unstagedChangesCollapsed ? [] : unstagedStatusEntries" :key="`unstaged-${entry.id}`" class="group flex min-h-8 items-center gap-2 border-t border-slate-200/70 px-2 py-1 text-xs hover:bg-sky-500/10 dark:border-slate-800">
+                  <span :class="['shrink-0', entry.untracked ? 'text-amber-500' : 'text-sky-500']">{{ entry.untracked ? 'U' : statusBadge(entry.worktreeStatus) }}</span>
+                  <div class="flex min-w-0 flex-1 items-baseline overflow-hidden">
+                    <span class="mono shrink-0 truncate font-bold text-slate-800 dark:text-slate-100" :title="entry.path">{{ fileName(entry.path) }}</span>
+                    <span v-if="fileDirectory(entry.path)" class="mono ml-2 min-w-0 flex-1 truncate text-slate-400" :title="fileDirectory(entry.path)">{{ fileDirectory(entry.path) }}</span>
+                    <span v-if="entry.originalPath !== entry.path" class="mono ml-2 shrink-0 truncate text-slate-400" :title="entry.originalPath">← {{ fileName(entry.originalPath) }}</span>
+                  </div>
+                  <div class="flex shrink-0 items-center gap-1 opacity-80 group-hover:opacity-100">
+                    <n-button size="tiny" quaternary @click="stageStatusEntry(entry)">暂存</n-button>
+                    <n-button size="tiny" quaternary type="error" @click="discardStatusEntry(entry)">丢弃</n-button>
+                  </div>
+                </article>
+              </section>
+            </div>
+            <p v-else class="rounded-md border border-dashed border-slate-300 p-3 text-center text-xs text-slate-500 dark:border-slate-700 dark:text-slate-400">暂无工作区变更。</p>
+          </div>
         </section>
 
         <section v-else-if="rightPanel === 'commit'" class="space-y-4">
@@ -99,6 +147,7 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue';
 import { useCommands } from '@/composables/workbench/useCommands';
 import { useConfigFiles } from '@/composables/workbench/useConfigFiles';
 import { useGitFiles } from '@/composables/workbench/useGitFiles';
@@ -114,6 +163,7 @@ const {
 const {
   selectedCommit,
   overview,
+  statusEntries,
   commitRefs,
   shortParents
 } = useRepositoryData();
@@ -132,6 +182,9 @@ const {
   saveRepositoryPushCommand,
   runRepositoryPush,
   resetRepositoryPushDraft,
+  stageStatusEntry,
+  unstageStatusEntry,
+  discardStatusEntry,
   runCustomCommand,
   saveCustomCommand,
   clearCommandDraft
@@ -156,4 +209,42 @@ const {
   saveRepoConfig,
   saveGlobalConfig
 } = useConfigFiles();
+
+const stagedStatusEntries = computed(() => statusEntries.value.filter((entry) => entry.staged));
+const unstagedStatusEntries = computed(() => statusEntries.value.filter((entry) => entry.unstaged));
+const stagedChangesCollapsed = ref(false);
+const unstagedChangesCollapsed = ref(false);
+
+/**
+ * 提取变更文件名，用于紧凑列表主标题。
+ *
+ * @param path Git status 中的文件路径。
+ * @return 文件名。
+ */
+function fileName(path: string) {
+  const normalized = path.replaceAll('\\', '/');
+  return normalized.split('/').pop() || path;
+}
+
+/**
+ * 提取变更文件目录，用于弱化展示路径上下文。
+ *
+ * @param path Git status 中的文件路径。
+ * @return 文件所在目录。
+ */
+function fileDirectory(path: string) {
+  const normalized = path.replaceAll('\\', '/');
+  const lastSlash = normalized.lastIndexOf('/');
+  return lastSlash === -1 ? '' : normalized.slice(0, lastSlash);
+}
+
+/**
+ * 将 Git 状态字符压缩成列表右侧短标签。
+ *
+ * @param status Git status 短状态字符。
+ * @return 展示标签。
+ */
+function statusBadge(status: string) {
+  return status.trim() || 'M';
+}
 </script>

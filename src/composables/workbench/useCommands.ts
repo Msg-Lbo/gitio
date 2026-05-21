@@ -2,13 +2,14 @@ import { emit } from '@tauri-apps/api/event';
 import { commandPresets } from '@/data/presets';
 import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
 import { executeGit, getRepoOverview } from '@/services/gitApi';
-import type { SavedCommand } from '@/types/git';
+import type { GitStatusEntry, SavedCommand } from '@/types/git';
 import { commandLabel, parseGitCommand } from '@/utils/command';
 import { createId } from './utils';
 import { ensureRepo, message, showError } from './guards';
 import {
   commandAlias,
   commandConfirmVisible,
+  commandDangerAcknowledged,
   commandOutput,
   commandRunning,
   commitMessage,
@@ -18,6 +19,7 @@ import {
   overview,
   pendingCommand,
   pendingCommandArgs,
+  pendingCommandRisk,
   repoPath,
   repositoryPushCommands,
   repositoryPushDraft,
@@ -64,6 +66,40 @@ function runRepositoryPush() {
 }
 
 /**
+ * 暂存指定文件变更。
+ *
+ * @param entry Git status 文件变更条目。
+ * @return 无返回值。
+ */
+function stageStatusEntry(entry: GitStatusEntry) {
+  return runCommand(`git add -- ${quoteGitPath(entry.path)}`);
+}
+
+/**
+ * 取消暂存指定文件。
+ *
+ * @param entry Git status 文件变更条目。
+ * @return 无返回值。
+ */
+function unstageStatusEntry(entry: GitStatusEntry) {
+  return runCommand(`git restore --staged -- ${quoteGitPath(entry.path)}`);
+}
+
+/**
+ * 丢弃指定文件的工作区变更；未跟踪文件走 `git clean` 并触发危险确认。
+ *
+ * @param entry Git status 文件变更条目。
+ * @return 无返回值。
+ */
+function discardStatusEntry(entry: GitStatusEntry) {
+  if (entry.untracked) {
+    return runCommand(`git clean -f -- ${quoteGitPath(entry.path)}`);
+  }
+
+  return runCommand(`git restore --worktree -- ${quoteGitPath(entry.path)}`);
+}
+
+/**
  * 将当前仓库 Push 指令恢复为默认值。
  *
  * @return 无返回值。
@@ -91,6 +127,7 @@ export function runCommand(command: string) {
 
   pendingCommand.value = command;
   pendingCommandArgs.value = args;
+  commandDangerAcknowledged.value = false;
   commandConfirmVisible.value = true;
 }
 
@@ -107,6 +144,7 @@ function cancelPendingCommand() {
   commandConfirmVisible.value = false;
   pendingCommand.value = '';
   pendingCommandArgs.value = [];
+  commandDangerAcknowledged.value = false;
 }
 
 /**
@@ -117,6 +155,11 @@ function cancelPendingCommand() {
 async function confirmPendingCommand() {
   if (!pendingCommand.value || !pendingCommandArgs.value.length) {
     cancelPendingCommand();
+    return;
+  }
+
+  if (pendingCommandRisk.value.level === 'danger' && !commandDangerAcknowledged.value) {
+    message.warning('请先确认危险操作风险');
     return;
   }
 
@@ -152,6 +195,7 @@ async function executeConfirmedCommand(command: string, args: string[]) {
     commandConfirmVisible.value = false;
     pendingCommand.value = '';
     pendingCommandArgs.value = [];
+    commandDangerAcknowledged.value = false;
   }
 }
 
@@ -260,6 +304,23 @@ function addSavedCommandToFloating(savedCommand: SavedCommand) {
 }
 
 /**
+ * 将已保存的自定义指令从悬浮窗快捷区移除。
+ *
+ * @param savedCommand 已保存指令。
+ * @return 无返回值。
+ */
+function removeSavedCommandFromFloating(savedCommand: SavedCommand) {
+  if (!floatingCommandIds.value.includes(savedCommand.id)) {
+    message.info('该指令未在悬浮窗中');
+    return;
+  }
+
+  floatingCommandIds.value = floatingCommandIds.value.filter((commandId) => commandId !== savedCommand.id);
+  message.success(`已取消悬浮：${savedCommand.alias}`);
+  notifyFloatingDataChanged();
+}
+
+/**
  * 判断保存指令是否已经加入悬浮窗，用于主窗口提示当前状态。
  *
  * @param savedCommand 已保存指令。
@@ -341,6 +402,16 @@ function exportSelectedBranchLog() {
 }
 
 /**
+ * 将文件路径转换为可被前端命令解析器安全处理的双引号参数。
+ *
+ * @param path Git status 中的文件路径。
+ * @return 已转义的命令参数。
+ */
+function quoteGitPath(path: string) {
+  return `"${path.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+}
+
+/**
  * 暴露命令中心、确认弹窗和提交动作状态。
  *
  * @return 命令状态与操作。
@@ -349,7 +420,9 @@ export function useCommands() {
   return {
     commandRunning,
     commandConfirmVisible,
+    commandDangerAcknowledged,
     pendingCommand,
+    pendingCommandRisk,
     commandAlias,
     customCommand,
     editingCommandId,
@@ -361,6 +434,9 @@ export function useCommands() {
     saveRepositoryPushCommand,
     runRepositoryPush,
     resetRepositoryPushDraft,
+    stageStatusEntry,
+    unstageStatusEntry,
+    discardStatusEntry,
     runCommand,
     cancelPendingCommand,
     confirmPendingCommand,
@@ -371,6 +447,7 @@ export function useCommands() {
     editSavedCommand,
     removeSavedCommand,
     addSavedCommandToFloating,
+    removeSavedCommandFromFloating,
     isSavedCommandFloating,
     clearCommandDraft,
     cancelCommandEdit,

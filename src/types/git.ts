@@ -68,3 +68,15 @@ export interface RepositoryPushCommand {
   repoPath: string;
   command: string;
 }
+
+export interface GitStatusEntry {
+  id: string;
+  path: string;
+  originalPath: string;
+  indexStatus: string;
+  worktreeStatus: string;
+  statusLabel: string;
+  staged: boolean;
+  unstaged: boolean;
+  untracked: boolean;
+}

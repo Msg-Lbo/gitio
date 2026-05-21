@@ -5,8 +5,12 @@ import { useCommitGraph } from '@/composables/useCommitGraph';
 import { ensureRepo, message, showError } from './guards';
 import {
   branchOptions,
+  commitGraphAuthor,
+  commitGraphAuthorOptions,
+  commitGraphKeyword,
   branches,
   currentRepositoryPushCommand,
+  filteredCommitLine,
   loading,
   overview,
   repoPath,
@@ -15,6 +19,7 @@ import {
   selectedBranch,
   selectedCommit,
   selectedCommitLine,
+  statusEntries,
   statusLines
 } from './state';
 import { loadConfigs } from './useConfigFiles';
@@ -74,7 +79,7 @@ export async function loadBranches(resetSelection = true) {
   if (!branches.value.length) {
     selectedBranch.value = '';
     selectedCommitLine.value = overview.value?.commitLine || [];
-    selectedCommit.value = selectedCommitLine.value[0] || null;
+    selectedCommit.value = filteredCommitLine.value[0] || null;
     return;
   }
 
@@ -93,12 +98,12 @@ export async function loadBranches(resetSelection = true) {
 export async function loadSelectedCommitLine() {
   if (!ensureRepo() || !selectedBranch.value) {
     selectedCommitLine.value = overview.value?.commitLine || [];
-    selectedCommit.value = selectedCommitLine.value[0] || null;
+    selectedCommit.value = filteredCommitLine.value[0] || null;
     return;
   }
 
   selectedCommitLine.value = await getCommitLine(repoPath.value, selectedBranch.value);
-  selectedCommit.value = selectedCommitLine.value[0] || null;
+  selectedCommit.value = filteredCommitLine.value[0] || null;
 }
 
 /**
@@ -155,9 +160,14 @@ export function useRepositoryData() {
     branches,
     selectedBranch,
     selectedCommitLine,
+    filteredCommitLine,
     selectedCommit,
+    commitGraphKeyword,
+    commitGraphAuthor,
+    commitGraphAuthorOptions,
     loading,
     statusLines,
+    statusEntries,
     branchOptions,
     ...graph,
     refreshAll,

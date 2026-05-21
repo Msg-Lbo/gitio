@@ -6,6 +6,7 @@
   "description": "Modern desktop Git workbench powered by Tauri 2, Vue 3 and Naive UI.",
   "scripts": {
     "dev": "vite",
+    "test": "node --test tests/command.test.mjs",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri",

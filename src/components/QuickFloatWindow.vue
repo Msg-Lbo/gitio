@@ -10,47 +10,82 @@
           <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-sky-300/80">Gitio Float</p>
           <h1 class="truncate text-sm font-black text-white">{{ activeRepositoryName }}</h1>
         </div>
-        <button class="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-200 transition hover:bg-white/10" type="button" @mousedown.stop @click.stop="collapseWindow">收起</button>
+        <button class="rounded-md border border-white/10 px-3 py-1 text-xs font-bold text-slate-200 transition hover:bg-white/10" type="button" @mousedown.stop @click.stop="collapseWindow">收起</button>
       </header>
 
       <div class="soft-scrollbar min-h-0 flex-1 space-y-4 overflow-auto p-3">
         <section class="space-y-2">
           <div class="flex items-center justify-between gap-2">
             <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-300">项目</h2>
-            <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{{ savedRepositories.length }}</span>
+            <span class="rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{{ savedRepositories.length }}</span>
           </div>
-          <div v-if="savedRepositories.length" class="space-y-1">
-            <button v-for="repo in savedRepositories" :key="repo.id" :class="['w-full rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50', repo.path === repoPath ? 'border-sky-300/60 bg-sky-400/15 text-sky-100' : 'border-white/8 bg-white/[0.04] text-slate-200 hover:bg-white/10']" type="button" :disabled="quickCommandRunning" @click="switchQuickRepository(repo)">
-              <span class="block truncate text-sm font-bold">{{ repo.alias }}</span>
-              <span class="mono block truncate text-[10px] text-slate-400">{{ repo.path }}</span>
-            </button>
+          <div v-if="savedRepositories.length">
+            <n-select class="quick-repository-select" :value="repoPath" :options="repositorySelectOptions" :filter="filterRepositoryOption" :theme-overrides="repositorySelectThemeOverrides" size="medium" filterable :disabled="quickCommandRunning" placeholder="选择项目" @update:value="handleRepositorySelect" />
           </div>
-          <p v-else class="rounded-xl border border-dashed border-white/10 p-3 text-xs text-slate-400">主窗口收藏项目后，这里会显示快捷切换入口。</p>
+          <p v-else class="rounded-md border border-dashed border-white/10 p-3 text-xs text-slate-400">主窗口收藏项目后，这里会显示快捷切换入口。</p>
         </section>
 
         <section class="space-y-2">
           <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-300">固定指令</h2>
           <div class="grid grid-cols-2 gap-2">
-            <button class="rounded-xl bg-sky-500 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand(currentPushCommand)">Push</button>
-            <button class="rounded-xl bg-teal-500 px-3 py-2 text-sm font-black text-white transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand('git pull --rebase --autostash')">Rebase Pull</button>
+            <button class="rounded-md bg-sky-500 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand(currentPushCommand)">Push</button>
+            <button class="rounded-md bg-teal-500 px-3 py-2 text-sm font-black text-white transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand('git pull --rebase --autostash')">Rebase Pull</button>
           </div>
         </section>
 
         <section class="space-y-2">
           <div class="flex items-center justify-between gap-2">
             <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-300">自定义指令</h2>
-            <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{{ floatingCommands.length }}</span>
+            <span class="rounded-md bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{{ floatingCommands.length }}</span>
           </div>
           <div v-if="floatingCommands.length" class="space-y-1">
-            <div v-for="command in floatingCommands" :key="command.id" class="group flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2 transition hover:bg-white/10">
+            <div v-for="command in floatingCommands" :key="command.id" class="group flex items-center gap-2 rounded-md border border-white/8 bg-white/[0.04] px-3 py-2 transition hover:bg-white/10">
               <button class="min-w-0 flex-1 text-left disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickCommandRunning" @click="runQuickCommand(command.command)">
                 <span class="block truncate text-sm font-bold text-slate-100">{{ command.alias }}</span>
                 <span class="mono block truncate text-[10px] text-slate-400">{{ command.command }}</span>
               </button>
-              <button class="shrink-0 rounded-full px-2 py-1 text-xs font-black text-slate-500 opacity-70 transition hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-30 group-hover:opacity-100" type="button" title="从悬浮窗移除" :disabled="quickCommandRunning" @click="removeFloatingCommand(command.id)">×</button>
+              <button class="shrink-0 rounded-md px-2 py-1 text-xs font-black text-slate-500 opacity-70 transition hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-30 group-hover:opacity-100" type="button" title="从悬浮窗移除" :disabled="quickCommandRunning" @click="removeFloatingCommand(command.id)">×</button>
             </div>
           </div>
-          <p v-else class="rounded-xl border border-dashed border-white/10 p-3 text-xs text-slate-400">在主窗口 Saved Commands 上右键，可添加到这里。</p>
+          <p v-else class="rounded-md border border-dashed border-white/10 p-3 text-xs text-slate-400">在主窗口 Saved Commands 上右键，可添加到这里。</p>
+        </section>
+
+        <section v-if="quickCommandOutput" class="space-y-2">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-300">最近结果</h2>
+            <span :class="quickOutputStatusClass">{{ quickOutputStatusText }}</span>
+          </div>
+          <div class="rounded-lg border border-white/8 bg-black/20 p-3">
+            <div class="flex items-start justify-between gap-3">
+              <div class="min-w-0">
+                <p class="mono truncate text-xs font-bold text-slate-100">{{ commandLabel(quickCommandOutput.command) }}</p>
+                <p class="mono mt-1 truncate text-[10px] text-slate-500">{{ quickCommandOutput.repoPath }}</p>
+              </div>
+              <span v-if="quickCommandOutput.finishedAt" class="shrink-0 text-[10px] text-slate-500">{{ quickCommandOutput.finishedAt }}</span>
+            </div>
+
+            <div class="mt-3 space-y-2">
+              <div v-if="quickCommandOutput.stdout" class="space-y-1">
+                <p class="text-[10px] font-black uppercase tracking-[0.16em] text-emerald-300">标准输出</p>
+                <pre class="mono max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-md bg-emerald-950/30 p-2 text-[11px] leading-5 text-emerald-50">{{ quickCommandOutput.stdout }}</pre>
+              </div>
+              <div v-if="quickCommandOutput.stderr" class="space-y-1">
+                <p class="text-[10px] font-black uppercase tracking-[0.16em] text-amber-300">错误输出</p>
+                <pre class="mono max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-md bg-amber-950/30 p-2 text-[11px] leading-5 text-amber-50">{{ quickCommandOutput.stderr }}</pre>
+              </div>
+              <div v-if="quickCommandOutput.error" class="space-y-1">
+                <p class="text-[10px] font-black uppercase tracking-[0.16em] text-red-300">异常信息</p>
+                <pre class="mono max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-md bg-red-950/30 p-2 text-[11px] leading-5 text-red-50">{{ quickCommandOutput.error }}</pre>
+              </div>
+              <p v-if="quickCommandOutput.code === null" class="rounded-md border border-dashed border-sky-300/20 p-2 text-[11px] text-sky-100">命令执行中，等待输出...</p>
+              <p v-else-if="!quickCommandOutput.stdout && !quickCommandOutput.stderr && !quickCommandOutput.error" class="rounded-md border border-dashed border-white/10 p-2 text-[11px] text-slate-400">命令执行完成，没有输出。</p>
+            </div>
+
+            <div class="mt-3 flex justify-end gap-2">
+              <button class="rounded-md border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="!quickOutputText" @click="copyQuickOutput">复制输出</button>
+              <button class="rounded-md border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 transition hover:bg-white/10" type="button" @click="clearQuickOutput">清空</button>
+            </div>
+          </div>
         </section>
       </div>
 
@@ -58,14 +93,22 @@
         {{ statusText }}
       </footer>
 
-      <div v-if="pendingQuickCommand" class="absolute bottom-10 left-3 right-3 rounded-2xl border border-sky-300/30 bg-[#0b1d31] p-3 shadow-2xl shadow-black/40">
-        <div class="absolute -bottom-2 left-8 h-4 w-4 rotate-45 border-b border-r border-sky-300/30 bg-[#0b1d31]"></div>
-        <p class="text-xs font-black text-sky-200">确认执行命令</p>
+      <div v-if="pendingQuickCommand" :class="quickConfirmPanelClass">
+        <div :class="quickConfirmArrowClass"></div>
+        <div class="flex items-center justify-between gap-2">
+          <p :class="quickConfirmTitleClass">{{ pendingQuickRisk.title }}</p>
+          <span v-if="pendingQuickRisk.level !== 'safe'" :class="quickRiskBadgeClass">{{ pendingQuickRisk.level === 'danger' ? '危险' : '注意' }}</span>
+        </div>
+        <p v-if="pendingQuickRisk.level !== 'safe'" class="mt-1 rounded-md bg-black/20 px-2 py-1.5 text-[11px] leading-5 text-slate-200">{{ pendingQuickRisk.description }}</p>
+        <label v-if="pendingQuickRisk.level === 'danger'" class="mt-2 flex items-start gap-2 rounded-md border border-red-300/20 bg-red-950/20 px-2 py-2 text-[11px] leading-5 text-red-50">
+          <input v-model="dangerAcknowledged" class="mt-1 h-3.5 w-3.5 accent-red-400" type="checkbox" :disabled="quickCommandRunning" />
+          <span>我已确认该操作可能造成不可恢复影响，仍要继续执行。</span>
+        </label>
         <p class="mt-1 text-[11px] leading-5 text-slate-400">将在当前悬浮窗选中的仓库执行：</p>
-        <pre class="mono mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/30 p-2 text-[11px] leading-5 text-slate-100">{{ pendingQuickCommand }}</pre>
+        <pre class="mono mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-md bg-black/30 p-2 text-[11px] leading-5 text-slate-100">{{ pendingQuickCommand }}</pre>
         <div class="mt-3 flex justify-end gap-2">
-          <button class="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickCommandRunning" @click="cancelQuickCommand">取消</button>
-          <button class="rounded-full bg-sky-500 px-3 py-1 text-xs font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700" type="button" :disabled="quickCommandRunning" @click="confirmQuickCommand">{{ quickCommandRunning ? '执行中' : '执行' }}</button>
+          <button class="rounded-md border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickCommandRunning" @click="cancelQuickCommand">取消</button>
+          <button :class="quickConfirmButtonClass" type="button" :disabled="quickCommandRunning || quickConfirmBlocked" @click="confirmQuickCommand">{{ quickCommandRunning ? '执行中' : '执行' }}</button>
         </div>
       </div>
     </section>
@@ -77,11 +120,12 @@ import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import type { SelectOption } from 'naive-ui';
 import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
 import appIcon from '../../docs/assets/gitio-logo.svg';
-import type { RepositoryPushCommand, SavedCommand, SavedRepository } from '@/types/git';
+import type { GitCommandResult, RepositoryPushCommand, SavedCommand, SavedRepository } from '@/types/git';
 import { executeGit } from '@/services/gitApi';
-import { commandLabel, parseGitCommand } from '@/utils/command';
+import { commandLabel, detectGitCommandRisk, parseGitCommand } from '@/utils/command';
 import { inferRepoAlias, loadStorage, STORAGE_KEYS } from '@/composables/workbench/utils';
 import {
   currentRepositoryPushCommand,
@@ -106,12 +150,158 @@ const pendingQuickCommand = ref('');
 const pendingQuickCommandArgs = ref<string[]>([]);
 const pendingQuickRepoPath = ref('');
 const quickCommandRunning = ref(false);
+const quickCommandOutput = ref<QuickCommandOutput | null>(null);
+const dangerAcknowledged = ref(false);
 
 const activeRepositoryName = computed(() => {
   const active = savedRepositories.value.find((repo) => repo.path === repoPath.value);
   return active?.alias || inferRepoAlias(repoPath.value) || '未选择项目';
 });
+const repositorySelectOptions = computed<SelectOption[]>(() => {
+  const options = savedRepositories.value.map((repo) => ({
+    label: repo.alias,
+    value: repo.path
+  }));
+  const hasCurrentRepository = options.some((option) => option.value === repoPath.value);
+
+  if (!repoPath.value.trim() || hasCurrentRepository) {
+    return options;
+  }
+
+  return [
+    {
+      label: `${activeRepositoryName.value}（未收藏）`,
+      value: repoPath.value,
+      disabled: true
+    },
+    ...options
+  ];
+});
 const currentPushCommand = computed(() => currentRepositoryPushCommand.value);
+const repositorySelectThemeOverrides = {
+  peers: {
+    InternalSelection: {
+      border: '1px solid rgba(125, 211, 252, 0.22)',
+      borderActive: '1px solid rgba(125, 211, 252, 0.72)',
+      borderFocus: '1px solid rgba(125, 211, 252, 0.72)',
+      borderHover: '1px solid rgba(125, 211, 252, 0.48)',
+      borderRadius: '7px',
+      boxShadowActive: '0 0 0 3px rgba(14, 165, 233, 0.18)',
+      boxShadowFocus: '0 0 0 3px rgba(14, 165, 233, 0.18)',
+      color: 'rgba(15, 23, 42, 0.92)',
+      colorActive: 'rgba(8, 47, 73, 0.92)',
+      colorDisabled: 'rgba(15, 23, 42, 0.72)',
+      textColor: '#f8fafc',
+      placeholderColor: '#64748b',
+      arrowColor: '#7dd3fc',
+      heightMedium: '44px'
+    },
+    InternalSelectMenu: {
+      borderRadius: '7px',
+      color: '#08111f',
+      boxShadow: '0 18px 40px rgba(0, 0, 0, 0.38)',
+      optionTextColor: '#cbd5e1',
+      optionTextColorActive: '#f8fafc',
+      optionTextColorPressed: '#f8fafc',
+      optionTextColorPending: '#f8fafc',
+      optionColorPending: 'rgba(14, 165, 233, 0.18)',
+      optionColorActive: 'rgba(14, 165, 233, 0.24)',
+      optionColorActivePending: 'rgba(14, 165, 233, 0.32)',
+      optionCheckColor: '#38bdf8'
+    }
+  }
+};
+const pendingQuickRisk = computed(() => detectGitCommandRisk(pendingQuickCommandArgs.value));
+const quickConfirmBlocked = computed(() => pendingQuickRisk.value.level === 'danger' && !dangerAcknowledged.value);
+const quickConfirmPanelClass = computed(() => [
+  'absolute bottom-10 left-3 right-3 rounded-lg border p-3 shadow-2xl shadow-black/40',
+  pendingQuickRisk.value.level === 'danger'
+    ? 'border-red-300/40 bg-[#2a0f18]'
+    : pendingQuickRisk.value.level === 'warning'
+      ? 'border-amber-300/40 bg-[#241b0c]'
+      : 'border-sky-300/30 bg-[#0b1d31]'
+]);
+const quickConfirmArrowClass = computed(() => [
+  'absolute -bottom-2 left-8 h-4 w-4 rotate-45 border-b border-r',
+  pendingQuickRisk.value.level === 'danger'
+    ? 'border-red-300/40 bg-[#2a0f18]'
+    : pendingQuickRisk.value.level === 'warning'
+      ? 'border-amber-300/40 bg-[#241b0c]'
+      : 'border-sky-300/30 bg-[#0b1d31]'
+]);
+const quickConfirmTitleClass = computed(() => [
+  'text-xs font-black',
+  pendingQuickRisk.value.level === 'danger'
+    ? 'text-red-200'
+    : pendingQuickRisk.value.level === 'warning'
+      ? 'text-amber-200'
+      : 'text-sky-200'
+]);
+const quickRiskBadgeClass = computed(() => [
+  'rounded-md px-2 py-0.5 text-[10px] font-black',
+  pendingQuickRisk.value.level === 'danger'
+    ? 'bg-red-400/20 text-red-100'
+    : 'bg-amber-400/20 text-amber-100'
+]);
+const quickConfirmButtonClass = computed(() => [
+  'rounded-md px-3 py-1 text-xs font-black text-white transition disabled:cursor-not-allowed disabled:bg-slate-700',
+  pendingQuickRisk.value.level === 'danger'
+    ? 'bg-red-500 hover:bg-red-400'
+    : pendingQuickRisk.value.level === 'warning'
+      ? 'bg-amber-500 hover:bg-amber-400'
+      : 'bg-sky-500 hover:bg-sky-400'
+]);
+const quickOutputText = computed(() => {
+  if (!quickCommandOutput.value) {
+    return '';
+  }
+
+  return [
+    quickCommandOutput.value.stdout ? `标准输出:\n${quickCommandOutput.value.stdout}` : '',
+    quickCommandOutput.value.stderr ? `错误输出:\n${quickCommandOutput.value.stderr}` : '',
+    quickCommandOutput.value.error ? `异常信息:\n${quickCommandOutput.value.error}` : ''
+  ].filter(Boolean).join('\n\n');
+});
+const quickOutputStatusText = computed(() => {
+  const output = quickCommandOutput.value;
+  if (!output) {
+    return '';
+  }
+
+  if (output.code === null) {
+    return '运行中';
+  }
+
+  if (output.error) {
+    return '失败';
+  }
+
+  return output.code === 0 ? '成功' : `退出码 ${output.code}`;
+});
+const quickOutputStatusClass = computed(() => {
+  const output = quickCommandOutput.value;
+  const baseClass = 'rounded-md px-2 py-0.5 text-[10px] font-black';
+
+  if (!output || output.code === null) {
+    return `${baseClass} bg-sky-400/15 text-sky-200`;
+  }
+
+  if (output.error || output.code !== 0) {
+    return `${baseClass} bg-red-400/15 text-red-200`;
+  }
+
+  return `${baseClass} bg-emerald-400/15 text-emerald-200`;
+});
+
+interface QuickCommandOutput {
+  command: string;
+  repoPath: string;
+  code: number | null;
+  stdout: string;
+  stderr: string;
+  error: string;
+  finishedAt: string;
+}
 
 let unlistenDataChanged: UnlistenFn | null = null;
 let unlistenFocusChanged: UnlistenFn | null = null;
@@ -281,6 +471,37 @@ function clearDragBlurTimer() {
 }
 
 /**
+ * 下拉搜索同时匹配项目别名和路径，但列表中只展示别名。
+ *
+ * @param pattern 用户输入的搜索文本。
+ * @param option 下拉选项。
+ * @return 命中别名或路径时返回 true。
+ */
+function filterRepositoryOption(pattern: string, option: SelectOption) {
+  const keyword = pattern.trim().toLowerCase();
+  const label = String(option.label || '').toLowerCase();
+  const value = String(option.value || '').toLowerCase();
+
+  return label.includes(keyword) || value.includes(keyword);
+}
+
+/**
+ * 处理悬浮窗项目下拉框选择，只更新悬浮窗当前项目。
+ *
+ * @param selectedPath 选中的仓库路径。
+ * @return 无返回值。
+ */
+function handleRepositorySelect(selectedPath: string) {
+  const repository = savedRepositories.value.find((repo) => repo.path === selectedPath);
+
+  if (!repository) {
+    return;
+  }
+
+  switchQuickRepository(repository);
+}
+
+/**
  * 仅切换悬浮窗当前项目，不唤醒主窗口，也不触发仓库加载。
  *
  * @param repository 要切换的收藏项目。
@@ -292,9 +513,7 @@ function switchQuickRepository(repository: SavedRepository) {
   }
 
   repoPath.value = repository.path;
-  pendingQuickCommand.value = '';
-  pendingQuickCommandArgs.value = [];
-  pendingQuickRepoPath.value = '';
+  clearPendingQuickCommand();
   statusText.value = `已切换：${repository.alias}`;
 }
 
@@ -319,7 +538,9 @@ function runQuickCommand(command: string) {
   pendingQuickCommand.value = command;
   pendingQuickCommandArgs.value = args;
   pendingQuickRepoPath.value = repoPath.value;
-  statusText.value = `等待确认：${commandLabel(command)}`;
+  statusText.value = pendingQuickRisk.value.level === 'danger'
+    ? `高风险确认：${commandLabel(command)}`
+    : `等待确认：${commandLabel(command)}`;
 }
 
 /**
@@ -332,9 +553,7 @@ function cancelQuickCommand() {
     return;
   }
 
-  pendingQuickCommand.value = '';
-  pendingQuickCommandArgs.value = [];
-  pendingQuickRepoPath.value = '';
+  clearPendingQuickCommand();
   statusText.value = '已取消执行';
 }
 
@@ -348,24 +567,113 @@ async function confirmQuickCommand() {
     return;
   }
 
+  if (quickConfirmBlocked.value) {
+    statusText.value = '请先确认危险操作风险';
+    return;
+  }
+
   const command = pendingQuickCommand.value;
+  const commandArgs = [...pendingQuickCommandArgs.value];
   const commandRepoPath = pendingQuickRepoPath.value;
   quickCommandRunning.value = true;
+  quickCommandOutput.value = createQuickCommandOutput(command, commandRepoPath);
   statusText.value = `执行中：${commandLabel(command)}`;
 
   try {
-    const result = await executeGit(commandRepoPath, pendingQuickCommandArgs.value);
+    const result = await executeGit(commandRepoPath, commandArgs);
+    updateQuickCommandOutput(result);
     statusText.value = result.code === 0
       ? `执行完成：${commandLabel(command)}`
       : `退出码 ${result.code}：${commandLabel(command)}`;
   } catch (error) {
-    statusText.value = `执行失败：${normalizeQuickError(error)}`;
+    const message = normalizeQuickError(error);
+    updateQuickCommandOutput(null, message);
+    statusText.value = `执行失败：${message}`;
   } finally {
     quickCommandRunning.value = false;
-    pendingQuickCommand.value = '';
-    pendingQuickCommandArgs.value = [];
-    pendingQuickRepoPath.value = '';
+    clearPendingQuickCommand();
   }
+}
+
+/**
+ * 清空悬浮窗命令确认框中的待执行数据。
+ *
+ * @return 无返回值。
+ */
+function clearPendingQuickCommand() {
+  pendingQuickCommand.value = '';
+  pendingQuickCommandArgs.value = [];
+  pendingQuickRepoPath.value = '';
+  dangerAcknowledged.value = false;
+}
+
+/**
+ * 创建最近执行结果的运行中占位记录。
+ *
+ * @param command 完整 Git 命令文本。
+ * @param commandRepoPath 命令执行仓库路径。
+ * @return 用于悬浮窗展示的执行记录。
+ */
+function createQuickCommandOutput(command: string, commandRepoPath: string): QuickCommandOutput {
+  return {
+    command,
+    repoPath: commandRepoPath,
+    code: null,
+    stdout: '',
+    stderr: '',
+    error: '',
+    finishedAt: ''
+  };
+}
+
+/**
+ * 把 Git 命令执行结果写入最近结果面板。
+ *
+ * @param result Git 命令返回结果，异常时为空。
+ * @param errorMessage 异常执行失败时的错误文本。
+ * @return 无返回值。
+ */
+function updateQuickCommandOutput(result: GitCommandResult | null, errorMessage = '') {
+  if (!quickCommandOutput.value) {
+    return;
+  }
+
+  quickCommandOutput.value = {
+    ...quickCommandOutput.value,
+    code: result?.code ?? 1,
+    stdout: result?.stdout || '',
+    stderr: result?.stderr || '',
+    error: errorMessage,
+    finishedAt: new Date().toLocaleTimeString()
+  };
+}
+
+/**
+ * 复制最近一次命令输出，便于用户排查失败原因。
+ *
+ * @return 无返回值。
+ */
+async function copyQuickOutput() {
+  if (!quickOutputText.value) {
+    return;
+  }
+
+  try {
+    await navigator.clipboard.writeText(quickOutputText.value);
+    statusText.value = '已复制最近输出';
+  } catch (error) {
+    statusText.value = `复制失败：${normalizeQuickError(error)}`;
+  }
+}
+
+/**
+ * 清空最近一次命令输出面板。
+ *
+ * @return 无返回值。
+ */
+function clearQuickOutput() {
+  quickCommandOutput.value = null;
+  statusText.value = '已清空最近结果';
 }
 
 /**
@@ -430,3 +738,16 @@ function normalizeQuickError(error: unknown) {
   return error instanceof Error ? error.message : String(error || '未知错误');
 }
 </script>
+
+<style scoped>
+.quick-repository-select :deep(.n-base-selection-label) {
+  padding-left: 12px;
+}
+
+.quick-repository-select :deep(.n-base-selection-input),
+.quick-repository-select :deep(.n-base-selection-input__content),
+.quick-repository-select :deep(.n-base-selection-placeholder) {
+  font-size: 14px;
+  font-weight: 800;
+}
+</style>

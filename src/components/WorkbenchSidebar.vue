@@ -29,9 +29,9 @@
 
         <section>
           <p class="mb-1 text-xs font-bold uppercase tracking-[0.24em] text-slate-500">Saved Commands</p>
-          <p class="mb-2 text-[11px] text-slate-500 dark:text-slate-400">右键保存指令可添加到悬浮窗。</p>
+          <p class="mb-2 text-[11px] text-slate-500 dark:text-slate-400">右键保存指令可悬浮、编辑或删除。</p>
           <div class="flex flex-col gap-1">
-            <button v-for="savedCommand in savedCommands" :key="savedCommand.id" class="rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-950/5 dark:hover:bg-white/5" type="button" :title="isSavedCommandFloating(savedCommand) ? '已在悬浮窗中，左键执行' : '左键执行，右键添加到悬浮窗'" @click="runCommand(savedCommand.command)" @contextmenu.prevent="addSavedCommandToFloating(savedCommand)">
+            <button v-for="savedCommand in savedCommands" :key="savedCommand.id" class="rounded-md px-3 py-2 text-left text-sm transition hover:bg-slate-950/5 dark:hover:bg-white/5" type="button" :title="isSavedCommandFloating(savedCommand) ? '已在悬浮窗中，左键执行，右键管理' : '左键执行，右键管理'" @click="runCommand(savedCommand.command)" @contextmenu.prevent="openSavedCommandMenu($event, savedCommand)">
               <span class="flex min-w-0 items-center gap-2">
                 <span class="block min-w-0 flex-1 truncate font-bold">{{ savedCommand.alias }}</span>
                 <n-tag v-if="isSavedCommandFloating(savedCommand)" size="tiny" type="success" round>悬浮</n-tag>
@@ -39,6 +39,7 @@
               <span class="mono block truncate text-[11px] text-slate-500">{{ savedCommand.command }}</span>
             </button>
           </div>
+          <n-dropdown trigger="manual" placement="bottom-start" :show="savedCommandMenuVisible" :x="savedCommandMenuPosition.x" :y="savedCommandMenuPosition.y" :options="savedCommandMenuOptions" @select="handleSavedCommandMenuSelect" @clickoutside="closeSavedCommandMenu" />
         </section>
       </div>
     </n-scrollbar>
@@ -46,9 +47,14 @@
 </template>
 
 <script setup lang="ts">
+import { computed, ref } from 'vue';
+import type { DropdownOption } from 'naive-ui';
+import type { SavedCommand } from '@/types/git';
 import { useCommands } from '@/composables/workbench/useCommands';
 import { useRepositories } from '@/composables/workbench/useRepositories';
 import { useRepositoryData } from '@/composables/workbench/useRepositoryData';
+
+type SavedCommandMenuKey = 'floating' | 'edit' | 'delete';
 
 const {
   repoPath,
@@ -70,6 +76,84 @@ const {
   savedCommands,
   runCommand,
   addSavedCommandToFloating,
+  removeSavedCommandFromFloating,
+  editSavedCommand,
+  removeSavedCommand,
   isSavedCommandFloating
 } = useCommands();
+
+const savedCommandMenuVisible = ref(false);
+const savedCommandMenuPosition = ref({ x: 0, y: 0 });
+const selectedSavedCommand = ref<SavedCommand | null>(null);
+const savedCommandMenuOptions = computed<DropdownOption[]>(() => [
+  {
+    label: selectedSavedCommand.value && isSavedCommandFloating(selectedSavedCommand.value) ? '取消悬浮' : '悬浮',
+    key: 'floating'
+  },
+  {
+    label: '编辑',
+    key: 'edit'
+  },
+  {
+    label: '删除',
+    key: 'delete'
+  }
+]);
+
+/**
+ * 在保存命令上打开右键菜单，提供悬浮、编辑和删除入口。
+ *
+ * @param event 鼠标右键事件，用于定位菜单。
+ * @param savedCommand 当前被右键点击的保存命令。
+ * @return 无返回值。
+ */
+function openSavedCommandMenu(event: MouseEvent, savedCommand: SavedCommand) {
+  selectedSavedCommand.value = savedCommand;
+  savedCommandMenuPosition.value = { x: event.clientX, y: event.clientY };
+  savedCommandMenuVisible.value = true;
+}
+
+/**
+ * 处理保存命令右键菜单操作。
+ *
+ * @param key 菜单项标识。
+ * @return 无返回值。
+ */
+function handleSavedCommandMenuSelect(key: string | number) {
+  const savedCommand = selectedSavedCommand.value;
+  closeSavedCommandMenu();
+
+  if (!savedCommand) {
+    return;
+  }
+
+  if (key === 'floating') {
+    if (isSavedCommandFloating(savedCommand)) {
+      removeSavedCommandFromFloating(savedCommand);
+      return;
+    }
+
+    addSavedCommandToFloating(savedCommand);
+    return;
+  }
+
+  if (key === 'edit') {
+    editSavedCommand(savedCommand);
+    return;
+  }
+
+  if (key === 'delete') {
+    removeSavedCommand(savedCommand.id);
+  }
+}
+
+/**
+ * 关闭保存命令右键菜单并清理选中命令。
+ *
+ * @return 无返回值。
+ */
+function closeSavedCommandMenu() {
+  savedCommandMenuVisible.value = false;
+  selectedSavedCommand.value = null;
+}
 </script>
