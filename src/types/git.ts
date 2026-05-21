@@ -64,15 +64,6 @@ export interface SavedCommand {
   command: string;
 }
 
-export interface FloatingRunCommandPayload {
-  command: string;
-  repoPath: string;
-}
-
-export interface FloatingSwitchRepositoryPayload {
-  repository: SavedRepository;
-}
-
 export interface RepositoryPushCommand {
   repoPath: string;
   command: string;

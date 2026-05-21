@@ -4,7 +4,7 @@
       <img :src="appIcon" alt="Gitio" class="h-10 w-10 rounded-xl" draggable="false" />
     </button>
 
-    <section v-else class="flex min-h-0 w-full flex-col bg-[#06111f]">
+    <section v-else class="relative flex min-h-0 w-full flex-col bg-[#06111f]">
       <header class="flex shrink-0 cursor-move items-center justify-between gap-3 border-b border-white/10 px-4 py-3" @mousedown="startDrag">
         <div class="min-w-0">
           <p class="text-[10px] font-bold uppercase tracking-[0.28em] text-sky-300/80">Gitio Float</p>
@@ -20,7 +20,7 @@
             <span class="rounded-full bg-white/10 px-2 py-0.5 text-[10px] text-slate-300">{{ savedRepositories.length }}</span>
           </div>
           <div v-if="savedRepositories.length" class="space-y-1">
-            <button v-for="repo in savedRepositories" :key="repo.id" :class="['w-full rounded-xl border px-3 py-2 text-left transition', repo.path === repoPath ? 'border-sky-300/60 bg-sky-400/15 text-sky-100' : 'border-white/8 bg-white/[0.04] text-slate-200 hover:bg-white/10']" type="button" @click="switchQuickRepository(repo)">
+            <button v-for="repo in savedRepositories" :key="repo.id" :class="['w-full rounded-xl border px-3 py-2 text-left transition disabled:cursor-not-allowed disabled:opacity-50', repo.path === repoPath ? 'border-sky-300/60 bg-sky-400/15 text-sky-100' : 'border-white/8 bg-white/[0.04] text-slate-200 hover:bg-white/10']" type="button" :disabled="quickCommandRunning" @click="switchQuickRepository(repo)">
               <span class="block truncate text-sm font-bold">{{ repo.alias }}</span>
               <span class="mono block truncate text-[10px] text-slate-400">{{ repo.path }}</span>
             </button>
@@ -31,8 +31,8 @@
         <section class="space-y-2">
           <h2 class="text-xs font-black uppercase tracking-[0.2em] text-slate-300">固定指令</h2>
           <div class="grid grid-cols-2 gap-2">
-            <button class="rounded-xl bg-sky-500 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath" @click="runQuickCommand(currentPushCommand)">Push</button>
-            <button class="rounded-xl bg-teal-500 px-3 py-2 text-sm font-black text-white transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath" @click="runQuickCommand('git pull --rebase --autostash')">Rebase Pull</button>
+            <button class="rounded-xl bg-sky-500 px-3 py-2 text-sm font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand(currentPushCommand)">Push</button>
+            <button class="rounded-xl bg-teal-500 px-3 py-2 text-sm font-black text-white transition hover:bg-teal-400 disabled:cursor-not-allowed disabled:bg-slate-700 disabled:text-slate-400" type="button" :disabled="!repoPath || quickCommandRunning" @click="runQuickCommand('git pull --rebase --autostash')">Rebase Pull</button>
           </div>
         </section>
 
@@ -43,11 +43,11 @@
           </div>
           <div v-if="floatingCommands.length" class="space-y-1">
             <div v-for="command in floatingCommands" :key="command.id" class="group flex items-center gap-2 rounded-xl border border-white/8 bg-white/[0.04] px-3 py-2 transition hover:bg-white/10">
-              <button class="min-w-0 flex-1 text-left" type="button" @click="runQuickCommand(command.command)">
+              <button class="min-w-0 flex-1 text-left disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickCommandRunning" @click="runQuickCommand(command.command)">
                 <span class="block truncate text-sm font-bold text-slate-100">{{ command.alias }}</span>
                 <span class="mono block truncate text-[10px] text-slate-400">{{ command.command }}</span>
               </button>
-              <button class="shrink-0 rounded-full px-2 py-1 text-xs font-black text-slate-500 opacity-70 transition hover:bg-red-500/20 hover:text-red-200 group-hover:opacity-100" type="button" title="从悬浮窗移除" @click="removeFloatingCommand(command.id)">×</button>
+              <button class="shrink-0 rounded-full px-2 py-1 text-xs font-black text-slate-500 opacity-70 transition hover:bg-red-500/20 hover:text-red-200 disabled:cursor-not-allowed disabled:opacity-30 group-hover:opacity-100" type="button" title="从悬浮窗移除" :disabled="quickCommandRunning" @click="removeFloatingCommand(command.id)">×</button>
             </div>
           </div>
           <p v-else class="rounded-xl border border-dashed border-white/10 p-3 text-xs text-slate-400">在主窗口 Saved Commands 上右键，可添加到这里。</p>
@@ -57,23 +57,31 @@
       <footer class="shrink-0 border-t border-white/10 px-3 py-2 text-[11px] text-slate-400">
         {{ statusText }}
       </footer>
+
+      <div v-if="pendingQuickCommand" class="absolute bottom-10 left-3 right-3 rounded-2xl border border-sky-300/30 bg-[#0b1d31] p-3 shadow-2xl shadow-black/40">
+        <div class="absolute -bottom-2 left-8 h-4 w-4 rotate-45 border-b border-r border-sky-300/30 bg-[#0b1d31]"></div>
+        <p class="text-xs font-black text-sky-200">确认执行命令</p>
+        <p class="mt-1 text-[11px] leading-5 text-slate-400">将在当前悬浮窗选中的仓库执行：</p>
+        <pre class="mono mt-2 max-h-24 overflow-auto whitespace-pre-wrap break-words rounded-xl bg-black/30 p-2 text-[11px] leading-5 text-slate-100">{{ pendingQuickCommand }}</pre>
+        <div class="mt-3 flex justify-end gap-2">
+          <button class="rounded-full border border-white/10 px-3 py-1 text-xs font-bold text-slate-300 transition hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickCommandRunning" @click="cancelQuickCommand">取消</button>
+          <button class="rounded-full bg-sky-500 px-3 py-1 text-xs font-black text-white transition hover:bg-sky-400 disabled:cursor-not-allowed disabled:bg-slate-700" type="button" :disabled="quickCommandRunning" @click="confirmQuickCommand">{{ quickCommandRunning ? '执行中' : '执行' }}</button>
+        </div>
+      </div>
     </section>
   </main>
 </template>
 
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
-import { emit, emitTo, listen, type UnlistenFn } from '@tauri-apps/api/event';
+import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { LogicalSize } from '@tauri-apps/api/dpi';
 import { getCurrentWindow } from '@tauri-apps/api/window';
-import {
-  FLOATING_DATA_CHANGED_EVENT,
-  FLOATING_RUN_COMMAND_EVENT,
-  FLOATING_SWITCH_REPOSITORY_EVENT
-} from '@/constants/floating';
+import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
 import appIcon from '../../docs/assets/gitio-logo.svg';
-import type { FloatingRunCommandPayload, FloatingSwitchRepositoryPayload, RepositoryPushCommand, SavedCommand, SavedRepository } from '@/types/git';
-import { commandLabel } from '@/utils/command';
+import type { RepositoryPushCommand, SavedCommand, SavedRepository } from '@/types/git';
+import { executeGit } from '@/services/gitApi';
+import { commandLabel, parseGitCommand } from '@/utils/command';
 import { inferRepoAlias, loadStorage, STORAGE_KEYS } from '@/composables/workbench/utils';
 import {
   currentRepositoryPushCommand,
@@ -94,6 +102,10 @@ const expanded = ref(false);
 const statusText = ref('左键展开悬浮窗');
 const collapsedPointer = ref({ x: 0, y: 0, dragging: false });
 const dragBlurProtected = ref(false);
+const pendingQuickCommand = ref('');
+const pendingQuickCommandArgs = ref<string[]>([]);
+const pendingQuickRepoPath = ref('');
+const quickCommandRunning = ref(false);
 
 const activeRepositoryName = computed(() => {
   const active = savedRepositories.value.find((repo) => repo.path === repoPath.value);
@@ -269,31 +281,91 @@ function clearDragBlurTimer() {
 }
 
 /**
- * 请求主窗口切换当前项目，真正的仓库刷新仍由主窗口完成。
+ * 仅切换悬浮窗当前项目，不唤醒主窗口，也不触发仓库加载。
  *
  * @param repository 要切换的收藏项目。
  * @return 无返回值。
  */
-async function switchQuickRepository(repository: SavedRepository) {
+function switchQuickRepository(repository: SavedRepository) {
+  if (quickCommandRunning.value) {
+    return;
+  }
+
   repoPath.value = repository.path;
-  statusText.value = `正在切换：${repository.alias}`;
-  await emitTo<FloatingSwitchRepositoryPayload>('main', FLOATING_SWITCH_REPOSITORY_EVENT, { repository });
+  pendingQuickCommand.value = '';
+  pendingQuickCommandArgs.value = [];
+  pendingQuickRepoPath.value = '';
+  statusText.value = `已切换：${repository.alias}`;
 }
 
 /**
- * 请求主窗口执行快捷命令，继续使用主窗口原有确认弹窗。
+ * 在悬浮窗中弹出气泡确认框，确认后由悬浮窗直接执行 Git 命令。
  *
  * @param command 完整 Git 命令。
  * @return 无返回值。
  */
-async function runQuickCommand(command: string) {
+function runQuickCommand(command: string) {
   if (!repoPath.value.trim()) {
     statusText.value = '请先选择项目';
     return;
   }
 
+  const args = parseGitCommand(command);
+  if (!args.length) {
+    statusText.value = '无效 Git 指令';
+    return;
+  }
+
+  pendingQuickCommand.value = command;
+  pendingQuickCommandArgs.value = args;
+  pendingQuickRepoPath.value = repoPath.value;
   statusText.value = `等待确认：${commandLabel(command)}`;
-  await emitTo<FloatingRunCommandPayload>('main', FLOATING_RUN_COMMAND_EVENT, { command, repoPath: repoPath.value });
+}
+
+/**
+ * 取消悬浮窗内待确认命令。
+ *
+ * @return 无返回值。
+ */
+function cancelQuickCommand() {
+  if (quickCommandRunning.value) {
+    return;
+  }
+
+  pendingQuickCommand.value = '';
+  pendingQuickCommandArgs.value = [];
+  pendingQuickRepoPath.value = '';
+  statusText.value = '已取消执行';
+}
+
+/**
+ * 执行悬浮窗气泡框中已确认的 Git 命令，不打开主窗口。
+ *
+ * @return 无返回值。
+ */
+async function confirmQuickCommand() {
+  if (!pendingQuickCommand.value || !pendingQuickCommandArgs.value.length || quickCommandRunning.value) {
+    return;
+  }
+
+  const command = pendingQuickCommand.value;
+  const commandRepoPath = pendingQuickRepoPath.value;
+  quickCommandRunning.value = true;
+  statusText.value = `执行中：${commandLabel(command)}`;
+
+  try {
+    const result = await executeGit(commandRepoPath, pendingQuickCommandArgs.value);
+    statusText.value = result.code === 0
+      ? `执行完成：${commandLabel(command)}`
+      : `退出码 ${result.code}：${commandLabel(command)}`;
+  } catch (error) {
+    statusText.value = `执行失败：${normalizeQuickError(error)}`;
+  } finally {
+    quickCommandRunning.value = false;
+    pendingQuickCommand.value = '';
+    pendingQuickCommandArgs.value = [];
+    pendingQuickRepoPath.value = '';
+  }
 }
 
 /**
@@ -346,5 +418,15 @@ function handleStorageChange(event: StorageEvent) {
   if (!event.key || Object.values(STORAGE_KEYS).includes(event.key as typeof STORAGE_KEYS[keyof typeof STORAGE_KEYS])) {
     refreshFloatingData();
   }
+}
+
+/**
+ * 将未知异常转换为悬浮窗底部状态可展示的短文本。
+ *
+ * @param error 捕获到的异常。
+ * @return 错误文本。
+ */
+function normalizeQuickError(error: unknown) {
+  return error instanceof Error ? error.message : String(error || '未知错误');
 }
 </script>
