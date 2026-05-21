@@ -38,6 +38,10 @@
               <span class="hidden shrink-0 text-xs text-slate-500 dark:text-slate-500 xl:inline">{{ row.commit.shortHash }}</span>
             </div>
           </article>
+          <div class="mt-3 flex justify-center">
+            <n-button v-if="canLoadMoreCommitLine" size="small" secondary :loading="commitLineLoadingMore" @click="loadMoreCommitLine">加载更早提交</n-button>
+            <span v-else class="text-xs text-slate-500 dark:text-slate-400">已加载当前分支全部可见提交</span>
+          </div>
           <div v-if="!filteredCommitLine.length" class="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">没有匹配当前筛选条件的提交。</div>
         </div>
         <div v-else class="rounded-lg border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500 dark:border-slate-700 dark:text-slate-400">选择仓库和分支后显示提交图谱。</div>
@@ -60,6 +64,8 @@ const {
   commitGraphKeyword,
   commitGraphAuthor,
   commitGraphAuthorOptions,
+  canLoadMoreCommitLine,
+  commitLineLoadingMore,
   graphRows,
   graphLaneX,
   graphCurvePath,
@@ -68,6 +74,7 @@ const {
   visibleBottomLines,
   compactRefs,
   refreshCommitLine,
+  loadMoreCommitLine,
   selectCommit
 } = useRepositoryData();
 

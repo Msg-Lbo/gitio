@@ -42,10 +42,11 @@ export function listBranches(repoPath: string) {
  *
  * @param repoPath 仓库根目录路径。
  * @param targetRef 分支、tag 或提交引用。
+ * @param maxCount 最多读取的提交数量。
  * @return 提交节点列表。
  */
-export function getCommitLine(repoPath: string, targetRef: string) {
-  return invoke<CommitNode[]>('get_commit_line', { repoPath, targetRef });
+export function getCommitLine(repoPath: string, targetRef: string, maxCount: number) {
+  return invoke<CommitNode[]>('get_commit_line', { repoPath, targetRef, maxCount });
 }
 
 /**

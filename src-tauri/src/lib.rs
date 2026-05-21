@@ -18,6 +18,9 @@ use std::os::windows::process::CommandExt;
 #[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
+const DEFAULT_COMMIT_LINE_LIMIT: usize = 120;
+const MAX_COMMIT_LINE_LIMIT: usize = 5000;
+
 #[derive(Debug, Error)]
 enum GitioError {
     #[error("仓库路径不存在")]
@@ -222,17 +225,18 @@ fn run_git_text(root: &Path, args: &[&str]) -> String {
  * @param target_ref 可选分支、tag 或提交引用，为空时使用当前 HEAD。
  * @return 结构化提交节点列表。
  */
-fn read_commit_line(root: &Path, target_ref: Option<&str>) -> Vec<CommitNode> {
+fn read_commit_line(root: &Path, target_ref: Option<&str>, max_count: usize) -> Vec<CommitNode> {
+    let max_count_arg = format!("--max-count={}", max_count.clamp(1, MAX_COMMIT_LINE_LIMIT));
     let mut args = vec![
         "log",
         "--topo-order",
         "--date=relative",
-        "--max-count=120",
         "--pretty=format:%H%x1f%h%x1f%P%x1f%D%x1f%an%x1f%ar%x1f%s%x1e",
     ]
     .iter()
     .map(|item| item.to_string())
     .collect::<Vec<_>>();
+    args.insert(3, max_count_arg);
 
     if let Some(target_ref) = target_ref.filter(|value| !value.trim().is_empty()) {
         args.push(target_ref.to_string());
@@ -367,7 +371,7 @@ fn get_repo_overview(repo_path: String) -> Result<RepoOverview, GitioError> {
     let remotes = run_git_text(&root, &["remote", "-v"]);
     let latest_commits = run_git_text(&root, &["log", "--oneline", "--decorate", "-20"]);
     let branch_ref = branch.trim();
-    let commit_line = read_commit_line(&root, (!branch_ref.is_empty()).then_some(branch_ref));
+    let commit_line = read_commit_line(&root, (!branch_ref.is_empty()).then_some(branch_ref), DEFAULT_COMMIT_LINE_LIMIT);
     let graph = run_git_text(
         &root,
         &[
@@ -399,9 +403,9 @@ fn list_branches(repo_path: String) -> Result<Vec<BranchItem>, GitioError> {
 }
 
 #[tauri::command]
-fn get_commit_line(repo_path: String, target_ref: String) -> Result<Vec<CommitNode>, GitioError> {
+fn get_commit_line(repo_path: String, target_ref: String, max_count: Option<usize>) -> Result<Vec<CommitNode>, GitioError> {
     let root = repo_root(&repo_path)?;
-    Ok(read_commit_line(&root, Some(&target_ref)))
+    Ok(read_commit_line(&root, Some(&target_ref), max_count.unwrap_or(DEFAULT_COMMIT_LINE_LIMIT)))
 }
 
 #[tauri::command]

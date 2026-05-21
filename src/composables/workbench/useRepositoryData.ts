@@ -8,7 +8,10 @@ import {
   commitGraphAuthor,
   commitGraphAuthorOptions,
   commitGraphKeyword,
+  canLoadMoreCommitLine,
   branches,
+  commitLineLimit,
+  commitLineLoadingMore,
   currentRepositoryPushCommand,
   filteredCommitLine,
   loading,
@@ -25,6 +28,7 @@ import {
 import { loadConfigs } from './useConfigFiles';
 import { loadGitDirectory } from './useGitFiles';
 
+const commitLineBatchSize = 120;
 const graph = useCommitGraph(selectedCommitLine);
 
 /**
@@ -62,6 +66,7 @@ export function resetRepositoryData() {
   selectedBranch.value = '';
   selectedCommitLine.value = [];
   selectedCommit.value = null;
+  commitLineLimit.value = commitLineBatchSize;
 }
 
 /**
@@ -85,6 +90,7 @@ export async function loadBranches(resetSelection = true) {
 
   if (resetSelection || !branches.value.some((branch) => branch.name === selectedBranch.value)) {
     selectedBranch.value = branches.value.find((branch) => branch.isCurrent)?.name || overview.value?.branch || branches.value[0].name;
+    commitLineLimit.value = commitLineBatchSize;
   }
 
   await loadSelectedCommitLine();
@@ -102,8 +108,32 @@ export async function loadSelectedCommitLine() {
     return;
   }
 
-  selectedCommitLine.value = await getCommitLine(repoPath.value, selectedBranch.value);
+  selectedCommitLine.value = await getCommitLine(repoPath.value, selectedBranch.value, commitLineLimit.value);
   selectedCommit.value = filteredCommitLine.value[0] || null;
+}
+
+/**
+ * 继续读取更早的提交记录，避免固定数量截断导致历史不可见。
+ *
+ * @return 无返回值。
+ */
+async function loadMoreCommitLine() {
+  if (!ensureRepo() || !selectedBranch.value || commitLineLoadingMore.value) {
+    return;
+  }
+
+  const previousLimit = commitLineLimit.value;
+  commitLineLimit.value += commitLineBatchSize;
+  commitLineLoadingMore.value = true;
+
+  try {
+    selectedCommitLine.value = await getCommitLine(repoPath.value, selectedBranch.value, commitLineLimit.value);
+  } catch (error) {
+    commitLineLimit.value = previousLimit;
+    showError(error);
+  } finally {
+    commitLineLoadingMore.value = false;
+  }
 }
 
 /**
@@ -165,6 +195,8 @@ export function useRepositoryData() {
     commitGraphKeyword,
     commitGraphAuthor,
     commitGraphAuthorOptions,
+    canLoadMoreCommitLine,
+    commitLineLoadingMore,
     loading,
     statusLines,
     statusEntries,
@@ -176,6 +208,7 @@ export function useRepositoryData() {
     resetRepositoryData,
     selectBranch,
     selectCommit,
-    refreshCommitLine
+    refreshCommitLine,
+    loadMoreCommitLine
   };
 }

@@ -17,6 +17,8 @@ export const branches = ref<BranchItem[]>([]);
 export const selectedBranch = ref('');
 export const selectedCommitLine = ref<CommitNode[]>([]);
 export const selectedCommit = ref<CommitNode | null>(null);
+export const commitLineLimit = ref(120);
+export const commitLineLoadingMore = ref(false);
 export const commitGraphKeyword = ref('');
 export const commitGraphAuthor = ref('');
 export const loading = ref(false);
@@ -71,6 +73,7 @@ export const branchOptions = computed(() => branches.value.map((branch) => ({
 })));
 export const currentRepositoryPushCommand = computed(() => repositoryPushCommands.value.find((item) => item.repoPath === repoPath.value.trim())?.command || 'git push origin HEAD');
 export const pendingCommandRisk = computed(() => detectGitCommandRisk(pendingCommandArgs.value));
+export const canLoadMoreCommitLine = computed(() => selectedCommitLine.value.length >= commitLineLimit.value);
 export const commitGraphAuthorOptions = computed(() => {
   const authorCounts = new Map<string, number>();
 
