@@ -77,7 +77,22 @@
                 <p class="text-[10px] font-black uppercase tracking-[0.16em] text-red-300">异常信息</p>
                 <pre class="mono max-h-28 overflow-auto whitespace-pre-wrap break-words rounded-md bg-red-950/30 p-2 text-[11px] leading-5 text-red-50">{{ quickCommandOutput.error }}</pre>
               </div>
-              <p v-if="quickCommandOutput.code === null" class="rounded-md border border-dashed border-sky-300/20 p-2 text-[11px] text-sky-100">命令执行中，等待输出...</p>
+              <div v-if="quickCommandOutput.code === null" class="space-y-2">
+                <div class="rounded-md border border-dashed border-sky-300/20 p-2 text-[11px] text-sky-100">
+                  命令执行中，等待输出...
+                </div>
+                <div class="rounded-md border border-sky-300/20 bg-sky-950/20 p-2">
+                  <div class="mb-1 flex items-center justify-between gap-2 text-[10px] text-sky-100/70">
+                    <span>执行进度</span>
+                    <span>{{ quickProgressLabel }}</span>
+                  </div>
+                  <n-progress type="line" :percentage="quickCommandOutput.progress ?? 0" :processing="(quickCommandOutput.progress ?? 0) < 100" :show-indicator="false" />
+                  <p class="mt-1 truncate text-[10px] text-sky-50/80">{{ quickCommandOutput.progressText || '等待 Git 输出...' }}</p>
+                  <div class="mt-2 flex justify-end">
+                    <button class="rounded-md border border-red-300/20 px-2 py-1 text-[10px] font-black text-red-100 transition hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50" type="button" :disabled="quickStopDisabled" @click="cancelQuickCommandRunning">停止</button>
+                  </div>
+                </div>
+              </div>
               <p v-else-if="!quickCommandOutput.stdout && !quickCommandOutput.stderr && !quickCommandOutput.error" class="rounded-md border border-dashed border-white/10 p-2 text-[11px] text-slate-400">命令执行完成，没有输出。</p>
             </div>
 
@@ -124,7 +139,7 @@ import type { SelectOption } from 'naive-ui';
 import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
 import appIcon from '../../docs/assets/gitio-logo.svg';
 import type { GitCommandResult, RepositoryPushCommand, SavedCommand, SavedRepository } from '@/types/git';
-import { executeGit } from '@/services/gitApi';
+import { cancelGitCommand, executeGitStreaming, GIT_COMMAND_PROGRESS_EVENT } from '@/services/gitApi';
 import { commandLabel, detectGitCommandRisk, parseGitCommand } from '@/utils/command';
 import { inferRepoAlias, loadStorage, STORAGE_KEYS } from '@/composables/workbench/utils';
 import {
@@ -152,6 +167,8 @@ const pendingQuickRepoPath = ref('');
 const quickCommandRunning = ref(false);
 const quickCommandOutput = ref<QuickCommandOutput | null>(null);
 const dangerAcknowledged = ref(false);
+const quickCommandRunId = ref('');
+const quickCommandStopRequested = ref(false);
 
 const activeRepositoryName = computed(() => {
   const active = savedRepositories.value.find((repo) => repo.path === repoPath.value);
@@ -292,6 +309,14 @@ const quickOutputStatusClass = computed(() => {
 
   return `${baseClass} bg-emerald-400/15 text-emerald-200`;
 });
+const quickProgressLabel = computed(() => {
+  if (!quickCommandOutput.value) {
+    return '等待进度';
+  }
+
+  return quickCommandOutput.value.progress !== null ? `${quickCommandOutput.value.progress}%` : '等待进度';
+});
+const quickStopDisabled = computed(() => !quickCommandRunId.value);
 
 interface QuickCommandOutput {
   command: string;
@@ -300,6 +325,8 @@ interface QuickCommandOutput {
   stdout: string;
   stderr: string;
   error: string;
+  progress: number | null;
+  progressText: string;
   finishedAt: string;
 }
 
@@ -576,22 +603,68 @@ async function confirmQuickCommand() {
   const commandArgs = [...pendingQuickCommandArgs.value];
   const commandRepoPath = pendingQuickRepoPath.value;
   quickCommandRunning.value = true;
+  quickCommandRunId.value = createQuickRunId();
+  quickCommandStopRequested.value = false;
   quickCommandOutput.value = createQuickCommandOutput(command, commandRepoPath);
   statusText.value = `执行中：${commandLabel(command)}`;
+  let unlistenProgress: UnlistenFn | null = null;
 
   try {
-    const result = await executeGit(commandRepoPath, commandArgs);
+    unlistenProgress = await listen<{ commandId: string; stream: 'stdout' | 'stderr'; line: string; progress: number | null }>(GIT_COMMAND_PROGRESS_EVENT, (event) => {
+      if (!quickCommandOutput.value || event.payload.commandId !== quickCommandRunId.value) {
+        return;
+      }
+
+      quickCommandOutput.value = {
+        ...quickCommandOutput.value,
+        progress: normalizeQuickProgress(event.payload.line, event.payload.progress, quickCommandOutput.value.progress),
+        progressText: event.payload.line
+      };
+    });
+
+    const result = await executeGitStreaming(commandRepoPath, commandArgs, quickCommandRunId.value);
     updateQuickCommandOutput(result);
-    statusText.value = result.code === 0
-      ? `执行完成：${commandLabel(command)}`
-      : `退出码 ${result.code}：${commandLabel(command)}`;
+    if (quickCommandStopRequested.value) {
+      statusText.value = `已停止：${commandLabel(command)}`;
+    } else {
+      statusText.value = result.code === 0
+        ? `执行完成：${commandLabel(command)}`
+        : `退出码 ${result.code}：${commandLabel(command)}`;
+    }
   } catch (error) {
     const message = normalizeQuickError(error);
     updateQuickCommandOutput(null, message);
     statusText.value = `执行失败：${message}`;
   } finally {
+    unlistenProgress?.();
     quickCommandRunning.value = false;
+    quickCommandRunId.value = '';
+    quickCommandStopRequested.value = false;
     clearPendingQuickCommand();
+  }
+}
+
+async function cancelQuickCommandRunning() {
+  if (!quickCommandRunId.value) {
+    return;
+  }
+
+  try {
+    const cancelled = await cancelGitCommand(quickCommandRunId.value);
+    if (cancelled) {
+      quickCommandStopRequested.value = true;
+      statusText.value = '正在停止命令...';
+      if (quickCommandOutput.value) {
+        quickCommandOutput.value = {
+          ...quickCommandOutput.value,
+          progressText: '正在停止命令...'
+        };
+      }
+    } else {
+      statusText.value = '未找到正在执行的命令';
+    }
+  } catch (error) {
+    statusText.value = `停止失败：${normalizeQuickError(error)}`;
   }
 }
 
@@ -622,6 +695,8 @@ function createQuickCommandOutput(command: string, commandRepoPath: string): Qui
     stdout: '',
     stderr: '',
     error: '',
+    progress: 0,
+    progressText: '',
     finishedAt: ''
   };
 }
@@ -644,8 +719,34 @@ function updateQuickCommandOutput(result: GitCommandResult | null, errorMessage 
     stdout: result?.stdout || '',
     stderr: result?.stderr || '',
     error: errorMessage,
+    progress: result?.code === 0 ? 100 : null,
+    progressText: result ? '' : '命令已失败',
     finishedAt: new Date().toLocaleTimeString()
   };
+}
+
+function normalizeQuickProgress(line: string, progress: number | null, current: number | null) {
+  if (progress === null) {
+    return current;
+  }
+
+  const stage = line.replace(/^remote:\s*/i, '').toLowerCase();
+  const ranges: Array<[string, number, number]> = [
+    ['counting objects', 5, 15],
+    ['compressing objects', 20, 25],
+    ['writing objects', 45, 45],
+    ['receiving objects', 20, 60],
+    ['resolving deltas', 85, 13],
+    ['checking out files', 80, 18]
+  ];
+  const range = ranges.find(([keyword]) => stage.includes(keyword));
+  const next = range ? Math.min(Math.round(range[1] + (progress * range[2]) / 100), 99) : Math.min(progress, 99);
+
+  return current === null ? next : Math.max(current, next);
+}
+
+function createQuickRunId() {
+  return `quick-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
 /**

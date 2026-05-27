@@ -1,14 +1,18 @@
 use serde::{Deserialize, Serialize};
 use std::{
-    env,
-    fs,
+    collections::HashMap,
+    env, fs,
+    io::{BufReader, Read},
     path::{Component, Path, PathBuf},
-    process::Command,
+    process::{Command, Stdio},
+    sync::{mpsc, Mutex},
+    thread,
+    time::Duration,
 };
 use tauri::{
     menu::MenuBuilder,
     tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent},
-    App, AppHandle, Manager, Runtime, Window, WindowEvent,
+    App, AppHandle, Emitter, Manager, Runtime, State, Window, WindowEvent,
 };
 use thiserror::Error;
 
@@ -20,6 +24,10 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 const DEFAULT_COMMIT_LINE_LIMIT: usize = 120;
 const MAX_COMMIT_LINE_LIMIT: usize = 5000;
+const GIT_COMMAND_PROGRESS_EVENT: &str = "gitio:git-command-progress";
+
+#[derive(Default)]
+struct ActiveGitProcesses(Mutex<HashMap<String, u32>>);
 
 #[derive(Debug, Error)]
 enum GitioError {
@@ -57,12 +65,29 @@ struct GitRequest {
     args: Vec<String>,
 }
 
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct GitStreamRequest {
+    repo_path: String,
+    args: Vec<String>,
+    command_id: String,
+}
+
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 struct CommandResult {
     code: i32,
     stdout: String,
     stderr: String,
+}
+
+#[derive(Clone, Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+struct GitCommandProgress {
+    command_id: String,
+    stream: String,
+    line: String,
+    progress: Option<u8>,
 }
 
 #[derive(Debug, Serialize)]
@@ -183,6 +208,154 @@ fn run_git(root: &Path, args: &[String]) -> Result<CommandResult, GitioError> {
         code: output.status.code().unwrap_or(-1),
         stdout: String::from_utf8_lossy(&output.stdout).to_string(),
         stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
+}
+
+fn append_output(stream: &str, line: &str, stdout: &mut String, stderr: &mut String) {
+    let target = if stream == "stdout" { stdout } else { stderr };
+    if !target.is_empty() {
+        target.push('\n');
+    }
+    target.push_str(line);
+}
+
+fn emit_git_progress(app: &AppHandle, command_id: &str, stream: &str, line: &str) {
+    let _ = app.emit(
+        GIT_COMMAND_PROGRESS_EVENT,
+        GitCommandProgress {
+            command_id: command_id.to_string(),
+            stream: stream.to_string(),
+            line: line.to_string(),
+            progress: parse_git_progress(line),
+        },
+    );
+}
+
+fn parse_git_progress(line: &str) -> Option<u8> {
+    let percent_index = line.find('%')?;
+    let before_percent = &line[..percent_index];
+    let reversed_digits = before_percent
+        .chars()
+        .rev()
+        .skip_while(|value| value.is_ascii_whitespace())
+        .take_while(|value| value.is_ascii_digit())
+        .collect::<String>();
+
+    if reversed_digits.is_empty() {
+        return None;
+    }
+
+    let digits = reversed_digits.chars().rev().collect::<String>();
+    digits.parse::<u8>().ok().map(|value| value.min(100))
+}
+
+fn spawn_stream_reader<R: Read + Send + 'static>(
+    reader: R,
+    stream: &'static str,
+    sender: mpsc::Sender<(String, String)>,
+) -> thread::JoinHandle<()> {
+    thread::spawn(move || {
+        let mut reader = BufReader::new(reader);
+        let mut buffer = Vec::new();
+        let mut byte = [0u8; 1];
+
+        loop {
+            match reader.read(&mut byte) {
+                Ok(0) => break,
+                Ok(_) => {
+                    if byte[0] == b'\n' || byte[0] == b'\r' {
+                        if !buffer.is_empty() {
+                            let line = String::from_utf8_lossy(&buffer).trim().to_string();
+                            if !line.is_empty() {
+                                let _ = sender.send((stream.to_string(), line));
+                            }
+                            buffer.clear();
+                        }
+                    } else {
+                        buffer.push(byte[0]);
+                    }
+                }
+                Err(_) => break,
+            }
+        }
+
+        if !buffer.is_empty() {
+            let line = String::from_utf8_lossy(&buffer).trim().to_string();
+            if !line.is_empty() {
+                let _ = sender.send((stream.to_string(), line));
+            }
+        }
+    })
+}
+
+fn drain_stream_events(
+    app: &AppHandle,
+    command_id: &str,
+    receiver: &mpsc::Receiver<(String, String)>,
+    stdout: &mut String,
+    stderr: &mut String,
+) {
+    while let Ok((stream, line)) = receiver.try_recv() {
+        append_output(&stream, &line, stdout, stderr);
+        emit_git_progress(app, command_id, &stream, &line);
+    }
+}
+
+fn run_git_streaming(
+    app: AppHandle,
+    state: &ActiveGitProcesses,
+    root: &Path,
+    args: &[String],
+    command_id: &str,
+) -> Result<CommandResult, GitioError> {
+    let mut child = git_command()
+        .args(args)
+        .current_dir(root)
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()?;
+    let process_id = child.id();
+
+    state
+        .0
+        .lock()
+        .map(|mut processes| processes.insert(command_id.to_string(), process_id))
+        .ok();
+
+    let (sender, receiver) = mpsc::channel();
+    let mut readers = Vec::new();
+    if let Some(stdout) = child.stdout.take() {
+        readers.push(spawn_stream_reader(stdout, "stdout", sender.clone()));
+    }
+    if let Some(stderr) = child.stderr.take() {
+        readers.push(spawn_stream_reader(stderr, "stderr", sender.clone()));
+    }
+    drop(sender);
+
+    let mut stdout = String::new();
+    let mut stderr = String::new();
+    let exit_status = loop {
+        drain_stream_events(&app, command_id, &receiver, &mut stdout, &mut stderr);
+        if let Some(status) = child.try_wait()? {
+            break status;
+        }
+        thread::sleep(Duration::from_millis(80));
+    };
+    for reader in readers {
+        let _ = reader.join();
+    }
+    drain_stream_events(&app, command_id, &receiver, &mut stdout, &mut stderr);
+
+    state
+        .0
+        .lock()
+        .map(|mut processes| processes.remove(command_id))
+        .ok();
+
+    Ok(CommandResult {
+        code: exit_status.code().unwrap_or(-1),
+        stdout,
+        stderr,
     })
 }
 
@@ -363,6 +536,58 @@ fn execute_git(request: GitRequest) -> Result<CommandResult, GitioError> {
 }
 
 #[tauri::command]
+fn execute_git_streaming(
+    app: AppHandle,
+    state: State<'_, ActiveGitProcesses>,
+    request: GitStreamRequest,
+) -> Result<CommandResult, GitioError> {
+    let root = repo_root(&request.repo_path)?;
+    run_git_streaming(
+        app,
+        state.inner(),
+        &root,
+        &request.args,
+        &request.command_id,
+    )
+}
+
+#[tauri::command]
+fn cancel_git_command(
+    state: State<'_, ActiveGitProcesses>,
+    command_id: String,
+) -> Result<bool, GitioError> {
+    let process_id = state
+        .0
+        .lock()
+        .ok()
+        .and_then(|processes| processes.get(&command_id).copied());
+
+    if let Some(process_id) = process_id {
+        return terminate_process(process_id);
+    }
+
+    Ok(false)
+}
+
+#[cfg(windows)]
+fn terminate_process(process_id: u32) -> Result<bool, GitioError> {
+    let mut command = Command::new("taskkill");
+    command.creation_flags(CREATE_NO_WINDOW);
+    let status = command
+        .args(["/PID", &process_id.to_string(), "/T", "/F"])
+        .status()?;
+    Ok(status.success())
+}
+
+#[cfg(not(windows))]
+fn terminate_process(process_id: u32) -> Result<bool, GitioError> {
+    let status = Command::new("kill")
+        .args(["-TERM", &process_id.to_string()])
+        .status()?;
+    Ok(status.success())
+}
+
+#[tauri::command]
 fn get_repo_overview(repo_path: String) -> Result<RepoOverview, GitioError> {
     let root = repo_root(&repo_path)?;
     let git_dir = git_dir(&root)?;
@@ -371,7 +596,11 @@ fn get_repo_overview(repo_path: String) -> Result<RepoOverview, GitioError> {
     let remotes = run_git_text(&root, &["remote", "-v"]);
     let latest_commits = run_git_text(&root, &["log", "--oneline", "--decorate", "-20"]);
     let branch_ref = branch.trim();
-    let commit_line = read_commit_line(&root, (!branch_ref.is_empty()).then_some(branch_ref), DEFAULT_COMMIT_LINE_LIMIT);
+    let commit_line = read_commit_line(
+        &root,
+        (!branch_ref.is_empty()).then_some(branch_ref),
+        DEFAULT_COMMIT_LINE_LIMIT,
+    );
     let graph = run_git_text(
         &root,
         &[
@@ -403,13 +632,24 @@ fn list_branches(repo_path: String) -> Result<Vec<BranchItem>, GitioError> {
 }
 
 #[tauri::command]
-fn get_commit_line(repo_path: String, target_ref: String, max_count: Option<usize>) -> Result<Vec<CommitNode>, GitioError> {
+fn get_commit_line(
+    repo_path: String,
+    target_ref: String,
+    max_count: Option<usize>,
+) -> Result<Vec<CommitNode>, GitioError> {
     let root = repo_root(&repo_path)?;
-    Ok(read_commit_line(&root, Some(&target_ref), max_count.unwrap_or(DEFAULT_COMMIT_LINE_LIMIT)))
+    Ok(read_commit_line(
+        &root,
+        Some(&target_ref),
+        max_count.unwrap_or(DEFAULT_COMMIT_LINE_LIMIT),
+    ))
 }
 
 #[tauri::command]
-fn list_git_directory(repo_path: String, relative_path: String) -> Result<Vec<GitFileEntry>, GitioError> {
+fn list_git_directory(
+    repo_path: String,
+    relative_path: String,
+) -> Result<Vec<GitFileEntry>, GitioError> {
     let root = repo_root(&repo_path)?;
     let base = git_dir(&root)?;
     let target = safe_git_path(&base, &relative_path)?;
@@ -454,7 +694,11 @@ fn read_git_file(repo_path: String, relative_path: String) -> Result<String, Git
 }
 
 #[tauri::command]
-fn write_git_file(repo_path: String, relative_path: String, content: String) -> Result<(), GitioError> {
+fn write_git_file(
+    repo_path: String,
+    relative_path: String,
+    content: String,
+) -> Result<(), GitioError> {
     let root = repo_root(&repo_path)?;
     let base = git_dir(&root)?;
     let target = safe_git_path(&base, &relative_path)?;
@@ -584,6 +828,7 @@ fn handle_window_event<R: Runtime>(window: &Window<R>, event: &WindowEvent) {
 
 pub fn run() {
     tauri::Builder::default()
+        .manage(ActiveGitProcesses::default())
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_process::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
@@ -594,6 +839,8 @@ pub fn run() {
         .on_window_event(handle_window_event)
         .invoke_handler(tauri::generate_handler![
             execute_git,
+            execute_git_streaming,
+            cancel_git_command,
             get_repo_overview,
             list_branches,
             get_commit_line,

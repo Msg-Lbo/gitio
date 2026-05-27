@@ -4,6 +4,13 @@ export interface GitCommandResult {
   stderr: string;
 }
 
+export interface GitCommandProgressPayload {
+  commandId: string;
+  stream: 'stdout' | 'stderr';
+  line: string;
+  progress: number | null;
+}
+
 export interface RepoOverview {
   root: string;
   gitDir: string;

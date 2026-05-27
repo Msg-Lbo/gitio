@@ -1,6 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import type { BranchItem, CommitNode, ConfigView, GitCommandResult, GitFileEntry, RepoOverview } from '@/types/git';
 
+export const GIT_COMMAND_PROGRESS_EVENT = 'gitio:git-command-progress';
+
 /**
  * 调用 Tauri 后端执行 Git 命令，参数不包含 `git` 本身。
  *
@@ -15,6 +17,20 @@ export function executeGit(repoPath: string, args: string[]) {
       args
     }
   });
+}
+
+export function executeGitStreaming(repoPath: string, args: string[], commandId: string) {
+  return invoke<GitCommandResult>('execute_git_streaming', {
+    request: {
+      repoPath,
+      args,
+      commandId
+    }
+  });
+}
+
+export function cancelGitCommand(commandId: string) {
+  return invoke<boolean>('cancel_git_command', { commandId });
 }
 
 /**

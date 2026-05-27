@@ -1,8 +1,8 @@
-import { emit } from '@tauri-apps/api/event';
+import { emit, listen } from '@tauri-apps/api/event';
 import { commandPresets } from '@/data/presets';
 import { FLOATING_DATA_CHANGED_EVENT } from '@/constants/floating';
-import { executeGit, getRepoOverview } from '@/services/gitApi';
-import type { GitStatusEntry, SavedCommand } from '@/types/git';
+import { cancelGitCommand, executeGitStreaming, getRepoOverview, GIT_COMMAND_PROGRESS_EVENT } from '@/services/gitApi';
+import type { GitCommandProgressPayload, GitStatusEntry, SavedCommand } from '@/types/git';
 import { commandLabel, parseGitCommand } from '@/utils/command';
 import { createId } from './utils';
 import { ensureRepo, message, showError } from './guards';
@@ -11,6 +11,10 @@ import {
   commandConfirmVisible,
   commandDangerAcknowledged,
   commandOutput,
+  commandProgressPercent,
+  commandProgressText,
+  commandRunId,
+  commandStopRequested,
   commandRunning,
   commitMessage,
   customCommand,
@@ -148,6 +152,29 @@ function cancelPendingCommand() {
 }
 
 /**
+ * 停止当前仍在后端执行的 Git 子进程。
+ *
+ * @return 无返回值。
+ */
+async function cancelRunningCommand() {
+  if (!commandRunning.value || !commandRunId.value) {
+    return;
+  }
+
+  try {
+    const cancelled = await cancelGitCommand(commandRunId.value);
+    if (cancelled) {
+      commandStopRequested.value = true;
+      commandProgressText.value = '正在停止命令...';
+    } else {
+      message.warning('未找到正在执行的命令');
+    }
+  } catch (error) {
+    showError(error);
+  }
+}
+
+/**
  * 用户确认后执行当前待执行命令。
  *
  * @return 无返回值。
@@ -174,13 +201,44 @@ async function confirmPendingCommand() {
  * @return 无返回值。
  */
 async function executeConfirmedCommand(command: string, args: string[]) {
+  const runId = createId();
+  let unlisten: (() => void) | null = null;
+  let streamedOutput = false;
   commandRunning.value = true;
+  commandRunId.value = runId;
+  commandStopRequested.value = false;
+  commandProgressPercent.value = 0;
+  commandProgressText.value = '正在启动 Git 命令...';
   commandOutput.value = `$ ${command}\n`;
   rightPanel.value = 'commands';
   try {
-    const result = await executeGit(repoPath.value, args);
-    commandOutput.value += `${result.stdout}${result.stderr}` || `(exit ${result.code})`;
-    if (result.code === 0) {
+    unlisten = await listen<GitCommandProgressPayload>(GIT_COMMAND_PROGRESS_EVENT, (event) => {
+      if (event.payload.commandId !== runId) {
+        return;
+      }
+
+      streamedOutput = true;
+      commandOutput.value += `${event.payload.line}\n`;
+      commandProgressText.value = event.payload.line;
+      if (event.payload.progress !== null) {
+        commandProgressPercent.value = Math.max(
+          commandProgressPercent.value,
+          normalizeGitProgress(event.payload.line, event.payload.progress)
+        );
+      }
+    });
+
+    const result = await executeGitStreaming(repoPath.value, args, runId);
+    const output = [result.stdout, result.stderr].filter(Boolean).join('\n');
+    if (!streamedOutput) {
+      commandOutput.value = `$ ${command}\n${output || `(exit ${result.code})`}`;
+    } else if (result.code !== 0) {
+      commandOutput.value += `\n(exit ${result.code})`;
+    }
+    if (commandStopRequested.value) {
+      message.info(`${commandLabel(command)} 已停止`);
+    } else if (result.code === 0) {
+      commandProgressPercent.value = 100;
       message.success(`${commandLabel(command)} 执行完成`);
     } else {
       message.warning(`${commandLabel(command)} 退出码 ${result.code}`);
@@ -191,7 +249,12 @@ async function executeConfirmedCommand(command: string, args: string[]) {
   } catch (error) {
     showError(error);
   } finally {
+    unlisten?.();
     commandRunning.value = false;
+    commandRunId.value = '';
+    commandStopRequested.value = false;
+    commandProgressPercent.value = 0;
+    commandProgressText.value = '';
     commandConfirmVisible.value = false;
     pendingCommand.value = '';
     pendingCommandArgs.value = [];
@@ -411,6 +474,24 @@ function quoteGitPath(path: string) {
   return `"${path.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
 }
 
+function normalizeGitProgress(line: string, progress: number) {
+  const stage = line.replace(/^remote:\s*/i, '').toLowerCase();
+  const ranges: Array<[string, number, number]> = [
+    ['counting objects', 5, 15],
+    ['compressing objects', 20, 25],
+    ['writing objects', 45, 45],
+    ['receiving objects', 20, 60],
+    ['resolving deltas', 85, 13],
+    ['checking out files', 80, 18]
+  ];
+  const range = ranges.find(([keyword]) => stage.includes(keyword));
+  if (!range) {
+    return Math.min(progress, 99);
+  }
+
+  return Math.min(Math.round(range[1] + (progress * range[2]) / 100), 99);
+}
+
 /**
  * 暴露命令中心、确认弹窗和提交动作状态。
  *
@@ -429,6 +510,8 @@ export function useCommands() {
     savedCommands,
     repositoryPushDraft,
     commandOutput,
+    commandProgressPercent,
+    commandProgressText,
     commitMessage,
     commandPresets,
     saveRepositoryPushCommand,
@@ -439,6 +522,7 @@ export function useCommands() {
     discardStatusEntry,
     runCommand,
     cancelPendingCommand,
+    cancelRunningCommand,
     confirmPendingCommand,
     runCustomCommand,
     usePreset,
